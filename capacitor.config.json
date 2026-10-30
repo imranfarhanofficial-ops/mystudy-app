@@ -1,0 +1,12 @@
+{
+  "appId": "com.mystudy.app",
+  "appName": "MyStudy",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": false
+  }
+}
