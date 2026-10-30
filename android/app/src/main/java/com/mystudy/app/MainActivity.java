@@ -9,12 +9,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         // Enhance WebView settings for offline HTML quiz files and local storage
         if (this.bridge != null && this.bridge.getWebView() != null) {
             WebView webView = this.bridge.getWebView();
             WebSettings settings = webView.getSettings();
-            
+
             // Allow DOM storage and local IndexedDB database persistence
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);

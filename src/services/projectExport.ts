@@ -265,44 +265,73 @@ public class MainActivity extends BridgeActivity {
   // GitHub Actions Free Cloud Build workflow
   const workflows = zip.folder('.github')!.folder('workflows')!;
   workflows.file(
-    'build-apk.yml',
+    'build-android.yml',
     `name: Build Android APK
 on:
-  workflow_dispatch:
   push:
     branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build Signed Android APK
+    name: Build & Release Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
-      - name: Set up JDK 21
+      - name: Set up Java JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '21'
+          cache: 'gradle'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
       - name: Install Dependencies
         run: npm install
-      - name: Build Web Production Assets
+      - name: Build Web Application
         run: npm run build
       - name: Sync Capacitor Android
         run: npx cap sync android
+      - name: Grant Execute Permission to Gradle
+        run: chmod +x android/gradlew
       - name: Build Android Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
-      - name: Upload Debug APK Artifact
+          ./gradlew assembleDebug --stacktrace --no-daemon
+      - name: Verify and Prepare APK File
+        run: |
+          APK_FILE=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
+            echo "Error: No APK file found"
+            exit 1
+          fi
+          cp "$APK_FILE" ./MyStudy-debug.apk
+      - name: Upload APK as Actions Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyStudy-Android-APK
-          path: android/app/build/outputs/apk/debug/*.apk`
+          path: MyStudy-debug.apk
+          retention-days: 30
+      - name: Create GitHub Release with APK Attached
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: v1.0.0-build.\${{ github.run_number }}
+          name: MyStudy v1.0.0 (Build #\${{ github.run_number }})
+          files: MyStudy-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}`
   );
 
   // User Guide

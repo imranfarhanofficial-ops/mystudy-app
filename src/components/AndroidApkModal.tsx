@@ -140,23 +140,26 @@ export const AndroidApkModal: React.FC<AndroidApkModalProps> = ({ isOpen, onClos
             </button>
           </div>
 
-          {/* Method 3: GitHub Actions Cloud Build */}
+          {/* Method 3: GitHub Actions Cloud Build (Connected Private Repo) */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-blue-600" />
-                <span>Method 3: GitHub Actions Free Cloud Build</span>
+                <span>GitHub Actions APK Generator</span>
               </span>
               <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 font-bold px-2 py-0.5 rounded-full">
-                Automated
+                Automated Cloud Build
               </span>
             </div>
 
-            <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1 list-decimal pl-4 mb-2">
-              <li>Upload the unzipped project to a GitHub repository.</li>
-              <li>Tap the <strong>Actions</strong> tab.</li>
-              <li>The pre-configured <code>build-apk.yml</code> builds your <code>.apk</code> file in 2 minutes.</li>
-              <li>Download the APK directly to your Android phone!</li>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-2 leading-relaxed">
+              When you push changes to your GitHub repository, the <code>build-android.yml</code> workflow automatically compiles the debug APK and publishes a GitHub Release.
+            </p>
+
+            <ol className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal pl-4 mb-2">
+              <li>Push your code to the <code>main</code> branch (or go to GitHub <strong>Actions</strong> tab and tap <strong>"Run workflow"</strong>).</li>
+              <li>Wait ~2 minutes for the build to finish.</li>
+              <li>Download <code>MyStudy-debug.apk</code> from the <strong>Releases</strong> section or from the Actions <strong>Artifacts</strong> on your phone.</li>
             </ol>
           </div>
 

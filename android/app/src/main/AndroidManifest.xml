@@ -37,7 +37,7 @@
         </provider>
     </application>
 
-    <!-- Permissions for local storage, HTML quiz imports, and offline backup -->
+    <!-- Permissions for offline storage, HTML quiz imports, and local backup -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
