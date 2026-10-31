@@ -23,6 +23,8 @@ import {
   setSetting,
   getFolderById,
   getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
   NotificationItem,
 } from './services/db';
 
@@ -42,6 +44,15 @@ export default function App() {
   const [dataRefreshCounter, setDataRefreshCounter] = useState(0);
 
   // Load notifications from IndexedDB
+  const refreshNotifications = async () => {
+    try {
+      const items = await getNotifications();
+      setNotifications(items);
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+    }
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -63,6 +74,26 @@ export default function App() {
       active = false;
     };
   }, [showNotifications]);
+
+  // Mark one notification as read
+  const handleMarkNotificationAsRead = async (id: string) => {
+    try {
+      await markNotificationAsRead(id);
+      await refreshNotifications();
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
+  };
+
+  // Mark all notifications as read
+  const handleMarkAllNotificationsAsRead = async () => {
+    try {
+      await markAllNotificationsAsRead();
+      await refreshNotifications();
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
+  };
 
   // Handle Android Hardware Back Button
   useEffect(() => {
@@ -437,8 +468,10 @@ export default function App() {
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
         notifications={notifications}
+        onMarkAsRead={handleMarkNotificationAsRead}
+        onMarkAllAsRead={handleMarkAllNotificationsAsRead}
         onOpenAppUpdates={() => setShowSettings(true)}
       />
     </div>
   );
-            }
+}
