@@ -1,9 +1,12 @@
+
 import { FolderItem, QuizFileItem, SubjectId } from '../types';
 
 const DB_NAME = 'MyStudyDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+
+// ================= DATABASE =================
 
 export function getDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -14,68 +17,91 @@ export function getDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
 
-      // Folders store
+      // Folders
       if (!db.objectStoreNames.contains('folders')) {
-        const folderStore = db.createObjectStore('folders', { keyPath: 'id' });
-        folderStore.createIndex('subjectId', 'subjectId', { unique: false });
-        folderStore.createIndex('parentId', 'parentId', { unique: false });
-        folderStore.createIndex('subject_parent', ['subjectId', 'parentId'], { unique: false });
+        const store = db.createObjectStore('folders', { keyPath: 'id' });
+        store.createIndex('subjectId', 'subjectId', { unique: false });
+        store.createIndex('parentId', 'parentId', { unique: false });
+        store.createIndex('subject_parent', ['subjectId', 'parentId'], { unique: false });
       }
 
-      // Files store
+      // Quiz Files
       if (!db.objectStoreNames.contains('files')) {
-        const fileStore = db.createObjectStore('files', { keyPath: 'id' });
-        fileStore.createIndex('subjectId', 'subjectId', { unique: false });
-        fileStore.createIndex('folderId', 'folderId', { unique: false });
-        fileStore.createIndex('subject_folder', ['subjectId', 'folderId'], { unique: false });
+        const store = db.createObjectStore('files', { keyPath: 'id' });
+        store.createIndex('subjectId', 'subjectId', { unique: false });
+        store.createIndex('folderId', 'folderId', { unique: false });
+        store.createIndex('subject_folder', ['subjectId', 'folderId'], { unique: false });
       }
 
-      // Settings store
+      // Settings
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
-    };
-    // Daily Routines store
-if (!db.objectStoreNames.contains('routines')) {
-  const routineStore = db.createObjectStore('routines', {
-    keyPath: 'id',
-  });
 
-  routineStore.createIndex('date', 'date', { unique: false });
-}
+      // Daily Routines
+      if (!db.objectStoreNames.contains('routines')) {
+        const store = db.createObjectStore('routines', { keyPath: 'id' });
+        store.createIndex('date', 'date', { unique: false });
+      }
+
+      // Notifications
+      if (!db.objectStoreNames.contains('notifications')) {
+        const store = db.createObjectStore('notifications', { keyPath: 'id' });
+        store.createIndex('date', 'date', { unique: false });
+      }
+    };
+
     request.onsuccess = () => {
-      resolve(request.result);
+      const db = request.result;
+
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+
+      resolve(db);
     };
 
     request.onerror = () => {
+      dbPromise = null;
       reject(request.error);
+    };
+
+    request.onblocked = () => {
+      console.warn('Database upgrade is blocked by another open connection.');
     };
   });
 
   return dbPromise;
 }
 
-// Generate unique ID
 export function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 // ================= FOLDER OPERATIONS =================
 
-export async function getFolders(subjectId: SubjectId, parentId: string | null): Promise<FolderItem[]> {
+export async function getFolders(
+  subjectId: SubjectId,
+  parentId: string | null
+): Promise<FolderItem[]> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('folders', 'readonly');
-    const store = tx.objectStore('folders');
-    const request = store.getAll();
+    const request = db.transaction('folders', 'readonly')
+      .objectStore('folders').getAll();
 
     request.onsuccess = () => {
-      const all: FolderItem[] = request.result || [];
+      const all = (request.result || []) as FolderItem[];
       const filtered = all.filter(
-        (f) => f.subjectId === subjectId && (f.parentId ?? null) === (parentId ?? null)
+        (f) => f.subjectId === subjectId &&
+          (f.parentId ?? null) === (parentId ?? null)
       );
-      // Sort alphabetically by default
-      filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+      filtered.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+
       resolve(filtered);
     };
 
@@ -85,16 +111,14 @@ export async function getFolders(subjectId: SubjectId, parentId: string | null):
 
 export async function getAllFolders(subjectId?: SubjectId): Promise<FolderItem[]> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('folders', 'readonly');
-    const store = tx.objectStore('folders');
-    const request = store.getAll();
+    const request = db.transaction('folders', 'readonly')
+      .objectStore('folders').getAll();
 
     request.onsuccess = () => {
-      let all: FolderItem[] = request.result || [];
-      if (subjectId) {
-        all = all.filter((f) => f.subjectId === subjectId);
-      }
+      let all = (request.result || []) as FolderItem[];
+      if (subjectId) all = all.filter((f) => f.subjectId === subjectId);
       resolve(all);
     };
 
@@ -104,10 +128,10 @@ export async function getAllFolders(subjectId?: SubjectId): Promise<FolderItem[]
 
 export async function getFolderById(id: string): Promise<FolderItem | null> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('folders', 'readonly');
-    const store = tx.objectStore('folders');
-    const request = store.get(id);
+    const request = db.transaction('folders', 'readonly')
+      .objectStore('folders').get(id);
 
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
@@ -120,6 +144,7 @@ export async function createFolder(
   name: string
 ): Promise<FolderItem> {
   const db = await getDB();
+
   const folder: FolderItem = {
     id: generateId(),
     subjectId,
@@ -131,29 +156,31 @@ export async function createFolder(
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction('folders', 'readwrite');
-    const store = tx.objectStore('folders');
-    const request = store.add(folder);
+    tx.objectStore('folders').add(folder);
 
-    request.onsuccess = () => resolve(folder);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(folder);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function renameFolder(id: string, newName: string): Promise<FolderItem> {
-  const db = await getDB();
+export async function renameFolder(
+  id: string,
+  newName: string
+): Promise<FolderItem> {
   const folder = await getFolderById(id);
   if (!folder) throw new Error('Folder not found');
 
   folder.name = newName.trim();
   folder.updatedAt = Date.now();
 
+  const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('folders', 'readwrite');
-    const store = tx.objectStore('folders');
-    const request = store.put(folder);
+    tx.objectStore('folders').put(folder);
 
-    request.onsuccess = () => resolve(folder);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(folder);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -161,34 +188,37 @@ export async function deleteFolder(id: string): Promise<void> {
   const allFolders = await getAllFolders();
   const allFiles = await getAllFiles();
 
-  // Recursively gather all subfolder IDs to delete
-  const folderIdsToDelete = new Set<string>([id]);
-  let added = true;
-  while (added) {
-    added = false;
-    for (const f of allFolders) {
-      if (f.parentId && folderIdsToDelete.has(f.parentId) && !folderIdsToDelete.has(f.id)) {
-        folderIdsToDelete.add(f.id);
-        added = true;
+  const folderIds = new Set<string>([id]);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const folder of allFolders) {
+      if (
+        folder.parentId &&
+        folderIds.has(folder.parentId) &&
+        !folderIds.has(folder.id)
+      ) {
+        folderIds.add(folder.id);
+        changed = true;
       }
     }
   }
 
-  // Find all files belonging to any of these folders
-  const filesToDelete = allFiles.filter((file) => file.folderId && folderIdsToDelete.has(file.folderId));
+  const filesToDelete = allFiles.filter(
+    (file) => file.folderId && folderIds.has(file.folderId)
+  );
 
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction(['folders', 'files'], 'readwrite');
     const folderStore = tx.objectStore('folders');
     const fileStore = tx.objectStore('files');
 
-    for (const fId of folderIdsToDelete) {
-      folderStore.delete(fId);
-    }
-    for (const f of filesToDelete) {
-      fileStore.delete(f.id);
-    }
+    folderIds.forEach((folderId) => folderStore.delete(folderId));
+    filesToDelete.forEach((file) => fileStore.delete(file.id));
 
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -197,19 +227,28 @@ export async function deleteFolder(id: string): Promise<void> {
 
 // ================= FILE OPERATIONS =================
 
-export async function getFiles(subjectId: SubjectId, folderId: string | null): Promise<QuizFileItem[]> {
+export async function getFiles(
+  subjectId: SubjectId,
+  folderId: string | null
+): Promise<QuizFileItem[]> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('files', 'readonly');
-    const store = tx.objectStore('files');
-    const request = store.getAll();
+    const request = db.transaction('files', 'readonly')
+      .objectStore('files').getAll();
 
     request.onsuccess = () => {
-      const all: QuizFileItem[] = request.result || [];
+      const all = (request.result || []) as QuizFileItem[];
+
       const filtered = all.filter(
-        (f) => f.subjectId === subjectId && (f.folderId ?? null) === (folderId ?? null)
+        (f) => f.subjectId === subjectId &&
+          (f.folderId ?? null) === (folderId ?? null)
       );
-      filtered.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+      filtered.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+
       resolve(filtered);
     };
 
@@ -219,16 +258,14 @@ export async function getFiles(subjectId: SubjectId, folderId: string | null): P
 
 export async function getAllFiles(subjectId?: SubjectId): Promise<QuizFileItem[]> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('files', 'readonly');
-    const store = tx.objectStore('files');
-    const request = store.getAll();
+    const request = db.transaction('files', 'readonly')
+      .objectStore('files').getAll();
 
     request.onsuccess = () => {
-      let all: QuizFileItem[] = request.result || [];
-      if (subjectId) {
-        all = all.filter((f) => f.subjectId === subjectId);
-      }
+      let all = (request.result || []) as QuizFileItem[];
+      if (subjectId) all = all.filter((f) => f.subjectId === subjectId);
       resolve(all);
     };
 
@@ -238,10 +275,10 @@ export async function getAllFiles(subjectId?: SubjectId): Promise<QuizFileItem[]
 
 export async function getFileById(id: string): Promise<QuizFileItem | null> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('files', 'readonly');
-    const store = tx.objectStore('files');
-    const request = store.get(id);
+    const request = db.transaction('files', 'readonly')
+      .objectStore('files').get(id);
 
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
@@ -258,18 +295,21 @@ export async function saveFile(params: {
 }): Promise<QuizFileItem> {
   const db = await getDB();
   const existingFiles = await getFiles(params.subjectId, params.folderId);
-  
-  // Handle duplicate name by appending counter e.g. Cockroach(1).html
+
   let finalName = params.name.trim();
   const existingNames = new Set(existingFiles.map((f) => f.name.toLowerCase()));
+
   if (existingNames.has(finalName.toLowerCase())) {
     const extIndex = finalName.lastIndexOf('.');
     const base = extIndex !== -1 ? finalName.substring(0, extIndex) : finalName;
     const ext = extIndex !== -1 ? finalName.substring(extIndex) : '';
+
     let counter = 1;
+
     while (existingNames.has(`${base}_${counter}${ext}`.toLowerCase())) {
       counter++;
     }
+
     finalName = `${base}_${counter}${ext}`;
   }
 
@@ -287,64 +327,73 @@ export async function saveFile(params: {
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction('files', 'readwrite');
-    const store = tx.objectStore('files');
-    const request = store.add(fileItem);
+    tx.objectStore('files').add(fileItem);
 
-    request.onsuccess = () => resolve(fileItem);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(fileItem);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function renameFile(id: string, newName: string): Promise<QuizFileItem> {
-  const db = await getDB();
+export async function renameFile(
+  id: string,
+  newName: string
+): Promise<QuizFileItem> {
   const file = await getFileById(id);
   if (!file) throw new Error('File not found');
 
   let sanitized = newName.trim();
-  if (!sanitized.toLowerCase().endsWith('.html') && !sanitized.toLowerCase().endsWith('.htm')) {
+
+  if (
+    !sanitized.toLowerCase().endsWith('.html') &&
+    !sanitized.toLowerCase().endsWith('.htm')
+  ) {
     sanitized += '.html';
   }
 
   file.name = sanitized;
   file.updatedAt = Date.now();
 
+  const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('files', 'readwrite');
-    const store = tx.objectStore('files');
-    const request = store.put(file);
+    tx.objectStore('files').put(file);
 
-    request.onsuccess = () => resolve(file);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(file);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function moveFile(id: string, newFolderId: string | null): Promise<QuizFileItem> {
-  const db = await getDB();
+export async function moveFile(
+  id: string,
+  newFolderId: string | null
+): Promise<QuizFileItem> {
   const file = await getFileById(id);
   if (!file) throw new Error('File not found');
 
   file.folderId = newFolderId;
   file.updatedAt = Date.now();
 
+  const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('files', 'readwrite');
-    const store = tx.objectStore('files');
-    const request = store.put(file);
+    tx.objectStore('files').put(file);
 
-    request.onsuccess = () => resolve(file);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(file);
+    tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function deleteFile(id: string): Promise<void> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('files', 'readwrite');
-    const store = tx.objectStore('files');
-    const request = store.delete(id);
+    tx.objectStore('files').delete(id);
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -353,18 +402,19 @@ export async function deleteFile(id: string): Promise<void> {
 export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
   try {
     const db = await getDB();
-    return new Promise((resolve) => {
-      const tx = db.transaction('settings', 'readonly');
-      const store = tx.objectStore('settings');
-      const request = store.get(key);
+
+    return await new Promise((resolve) => {
+      const request = db.transaction('settings', 'readonly')
+        .objectStore('settings').get(key);
 
       request.onsuccess = () => {
-        if (request.result && request.result.value !== undefined) {
-          resolve(request.result.value as T);
-        } else {
-          resolve(defaultValue);
-        }
+        resolve(
+          request.result && request.result.value !== undefined
+            ? request.result.value as T
+            : defaultValue
+        );
       };
+
       request.onerror = () => resolve(defaultValue);
     });
   } catch {
@@ -374,13 +424,13 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
 
 export async function setSetting<T>(key: string, value: T): Promise<void> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction('settings', 'readwrite');
-    const store = tx.objectStore('settings');
-    const request = store.put({ key, value });
+    tx.objectStore('settings').put({ key, value });
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 
@@ -398,6 +448,7 @@ export async function bulkImportData(
       const tx = db.transaction(['folders', 'files'], 'readwrite');
       tx.objectStore('folders').clear();
       tx.objectStore('files').clear();
+
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -405,8 +456,9 @@ export async function bulkImportData(
 
   const existingFolders = await getAllFolders();
   const existingFiles = await getAllFiles();
-  const existingFolderIds = new Set(existingFolders.map((f) => f.id));
-  const existingFileIds = new Set(existingFiles.map((f) => f.id));
+
+  const folderIds = new Set(existingFolders.map((f) => f.id));
+  const fileIds = new Set(existingFiles.map((f) => f.id));
 
   let addedFolders = 0;
   let addedFiles = 0;
@@ -416,16 +468,16 @@ export async function bulkImportData(
     const folderStore = tx.objectStore('folders');
     const fileStore = tx.objectStore('files');
 
-    for (const f of folders) {
-      if (!existingFolderIds.has(f.id) || overwrite) {
-        folderStore.put(f);
+    for (const folder of folders) {
+      if (!folderIds.has(folder.id) || overwrite) {
+        folderStore.put(folder);
         addedFolders++;
       }
     }
 
-    for (const fl of files) {
-      if (!existingFileIds.has(fl.id) || overwrite) {
-        fileStore.put(fl);
+    for (const file of files) {
+      if (!fileIds.has(file.id) || overwrite) {
+        fileStore.put(file);
         addedFiles++;
       }
     }
@@ -439,14 +491,22 @@ export async function bulkImportData(
 
 export async function clearAllUserData(): Promise<void> {
   const db = await getDB();
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(['folders', 'files'], 'readwrite');
+    const tx = db.transaction(
+      ['folders', 'files', 'routines'],
+      'readwrite'
+    );
+
     tx.objectStore('folders').clear();
     tx.objectStore('files').clear();
+    tx.objectStore('routines').clear();
+
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
+
 // ================= DAILY ROUTINE OPERATIONS =================
 
 export interface DailyRoutineItem {
@@ -459,12 +519,14 @@ export interface DailyRoutineItem {
   completedAt?: number;
 }
 
-export async function getDailyRoutines(date: string): Promise<DailyRoutineItem[]> {
+export async function getDailyRoutines(
+  date: string
+): Promise<DailyRoutineItem[]> {
   const db = await getDB();
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('routines', 'readonly');
-    const request = tx.objectStore('routines').index('date').getAll(date);
+    const request = db.transaction('routines', 'readonly')
+      .objectStore('routines').index('date').getAll(date);
 
     request.onsuccess = () => {
       const routines = (request.result || []) as DailyRoutineItem[];
@@ -494,6 +556,7 @@ export async function createDailyRoutine(
   return new Promise((resolve, reject) => {
     const tx = db.transaction('routines', 'readwrite');
     tx.objectStore('routines').add(routine);
+
     tx.oncomplete = () => resolve(routine);
     tx.onerror = () => reject(tx.error);
   });
@@ -579,4 +642,112 @@ export async function completeDailyRoutine(id: string): Promise<void> {
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error('Routine completion cancelled'));
   });
+}
+
+// ================= NOTIFICATION OPERATIONS =================
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  date: number;
+  type: 'update' | 'info' | 'success';
+  read: boolean;
+}
+
+export async function getNotifications(): Promise<NotificationItem[]> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const request = db.transaction('notifications', 'readonly')
+      .objectStore('notifications').getAll();
+
+    request.onsuccess = () => {
+      const items = (request.result || []) as NotificationItem[];
+      items.sort((a, b) => b.date - a.date);
+      resolve(items);
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function createNotification(
+  notification: Omit<NotificationItem, 'id' | 'date' | 'read'> & {
+    id?: string;
+    date?: number;
+  }
+): Promise<NotificationItem> {
+  const db = await getDB();
+
+  const item: NotificationItem = {
+    id: notification.id || generateId(),
+    title: notification.title,
+    message: notification.message,
+    date: notification.date ?? Date.now(),
+    type: notification.type,
+    read: false,
+  };
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notifications', 'readwrite');
+    tx.objectStore('notifications').put(item);
+
+    tx.oncomplete = () => resolve(item);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function markNotificationAsRead(id: string): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notifications', 'readwrite');
+    const store = tx.objectStore('notifications');
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const item = request.result as NotificationItem | undefined;
+
+      if (item && !item.read) {
+        item.read = true;
+        store.put(item);
       }
+    };
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function markAllNotificationsAsRead(): Promise<void> {
+  const items = await getNotifications();
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notifications', 'readwrite');
+    const store = tx.objectStore('notifications');
+
+    items.forEach((item) => {
+      if (!item.read) {
+        item.read = true;
+        store.put(item);
+      }
+    });
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('notifications', 'readwrite');
+    tx.objectStore('notifications').delete(id);
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
