@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, CalendarCheck, MoreVertical, Plus, Check,
-  ChevronDown, ChevronUp, Pencil, Lock, LockKeyhole,
-  Bed, BookOpen, FlaskConical, Atom, Dumbbell, Droplets,
-  Sunrise, Moon, X, Save, ClipboardList, Building2,
+  Pencil, Lock, LockKeyhole, Bed, BookOpen, FlaskConical,
+  Atom, Dumbbell, Droplets, Sunrise, Moon, X, Save,
+  ClipboardList, Building2, Trash2, Clock,
 } from 'lucide-react';
 
 import {
@@ -13,6 +13,8 @@ import {
   updateDailyRoutine,
   lockDailyRoutine,
   completeDailyRoutine,
+  deleteCompletedDailyRoutines,
+  getSetting,
   DailyRoutineItem,
 } from '../services/db';
 
@@ -20,8 +22,27 @@ interface DailyRoutineProps {
   onBack: () => void;
 }
 
+interface CountdownSettings {
+  enabled: boolean;
+  title: string;
+  startDate: string;
+  targetDate: string;
+}
+
+const DEFAULT_COUNTDOWN_SETTINGS: CountdownSettings = {
+  enabled: false,
+  title: 'My Target',
+  startDate: '',
+  targetDate: '',
+};
+
 function getLocalDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getDateStart(dateString: string): number {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day).getTime();
 }
 
 function getRoutineIcon(title: string) {
@@ -66,8 +87,11 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
   const [newTitle, setNewTitle] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [showCompleted, setShowCompleted] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
+  const [countdownSettings, setCountdownSettings] =
+    useState<CountdownSettings>(DEFAULT_COUNTDOWN_SETTINGS);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingCompleted, setDeletingCompleted] = useState(false);
 
   const dateKey = getLocalDateKey(now);
 
@@ -78,8 +102,38 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   useEffect(() => {
     let active = true;
+
+    const loadSettings = async () => {
+      try {
+        const saved = await getSetting<CountdownSettings>(
+          'daily_routine_countdown_settings',
+          DEFAULT_COUNTDOWN_SETTINGS
+        );
+
+        if (active) {
+          setCountdownSettings({
+            ...DEFAULT_COUNTDOWN_SETTINGS,
+            ...saved,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load countdown settings:', error);
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
     const load = async () => {
       setLoading(true);
+
       try {
         const result = await getDailyRoutines(dateKey);
         if (active) setRoutines(result);
@@ -89,16 +143,59 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
         if (active) setLoading(false);
       }
     };
-    load();
-    return () => { active = false; };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
   }, [dateKey]);
 
-  const pending = useMemo(() => routines.filter(item => !item.completed), [routines]);
-  const completed = useMemo(() => routines.filter(item => item.completed), [routines]);
+  const pending = useMemo(
+    () => routines.filter(item => !item.completed),
+    [routines]
+  );
 
-  const hourAngle = (now.getHours() % 12) * 30 + now.getMinutes() * 0.5;
-  const minuteAngle = now.getMinutes() * 6 + now.getSeconds() * 0.1;
-  const secondAngle = now.getSeconds() * 6;
+  const completed = useMemo(
+    () => routines.filter(item => item.completed),
+    [routines]
+  );
+
+  const countdown = useMemo(() => {
+    if (
+      !countdownSettings.enabled ||
+      !countdownSettings.startDate ||
+      !countdownSettings.targetDate
+    ) {
+      return null;
+    }
+
+    const currentTime = now.getTime();
+    const startTime = getDateStart(countdownSettings.startDate);
+    const targetEndTime = getDateStart(countdownSettings.targetDate) +
+      24 * 60 * 60 * 1000;
+
+    let destination: number;
+
+    if (currentTime < startTime) {
+      destination = startTime;
+    } else if (currentTime < targetEndTime) {
+      destination = targetEndTime;
+    } else {
+      return { completed: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
+    }
+
+    const difference = Math.max(0, destination - currentTime);
+    const totalSeconds = Math.floor(difference / 1000);
+
+    return {
+      completed: false,
+      days: Math.floor(totalSeconds / 86400),
+      hours: Math.floor((totalSeconds % 86400) / 3600),
+      minutes: Math.floor((totalSeconds % 3600) / 60),
+      seconds: totalSeconds % 60,
+    };
+  }, [now, countdownSettings]);
 
   const visibleDate = now.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -108,11 +205,14 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
   const handleCreate = async () => {
     const title = newTitle.trim();
     if (!title) return;
+
     try {
       const created = await createDailyRoutine(dateKey, title);
+
       setRoutines(previous =>
         [...previous, created].sort((a, b) => a.createdAt - b.createdAt)
       );
+
       setNewTitle('');
       setShowCreate(false);
     } catch (error) {
@@ -123,15 +223,19 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleEdit = async (id: string) => {
     const title = editingTitle.trim();
+
     if (!title) {
       alert('Routine-এর নাম লিখো।');
       return;
     }
+
     try {
       await updateDailyRoutine(id, title);
+
       setRoutines(previous =>
         previous.map(item => item.id === id ? { ...item, title } : item)
       );
+
       setEditingId(null);
       setEditingTitle('');
     } catch (error) {
@@ -142,9 +246,14 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleLock = async (item: DailyRoutineItem) => {
     if (item.locked || item.completed) return;
-    if (!window.confirm('এই Routine Lock করলে আর Edit করা যাবে না। Lock করতে চাও?')) return;
+
+    if (!window.confirm('এই Routine Lock করলে আর Edit করা যাবে না। Lock করতে চাও?')) {
+      return;
+    }
+
     try {
       await lockDailyRoutine(item.id);
+
       setRoutines(previous =>
         previous.map(r => r.id === item.id ? { ...r, locked: true } : r)
       );
@@ -156,8 +265,10 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleComplete = async (item: DailyRoutineItem) => {
     if (item.completed) return;
+
     try {
       await completeDailyRoutine(item.id);
+
       setRoutines(previous =>
         previous.map(r =>
           r.id === item.id
@@ -168,6 +279,29 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     } catch (error) {
       console.error(error);
       alert('Routine Complete করা যায়নি।');
+    }
+  };
+
+  const handleDeleteCompleted = async () => {
+    if (completed.length === 0) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+
+    setDeletingCompleted(true);
+
+    try {
+      await deleteCompletedDailyRoutines(dateKey);
+
+      setRoutines(previous => previous.filter(item => !item.completed));
+      setShowDeleteConfirm(false);
+
+      alert('Completed Routines ডিলিট করা হয়েছে।');
+    } catch (error) {
+      console.error(error);
+      alert('Completed Routines ডিলিট করা যায়নি।');
+    } finally {
+      setDeletingCompleted(false);
     }
   };
 
@@ -244,6 +378,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
             >
               <Pencil size={16}/>
             </button>
+
             <button
               onClick={() => handleLock(item)}
               className={`p-1 shrink-0 ${item.locked ? 'text-green-600' : 'text-slate-600 dark:text-slate-300'}`}
@@ -282,16 +417,22 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
           <button onClick={() => setShowMenu(!showMenu)} className="p-1.5" aria-label="More options">
             <MoreVertical size={22}/>
           </button>
+
           {showMenu && (
-            <div className="absolute right-0 top-10 z-50 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-emerald-100 dark:border-slate-700 p-1.5">
+            <div className="absolute right-0 top-10 z-50 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-emerald-100 dark:border-slate-700 p-1.5">
               <button
                 onClick={() => {
                   setShowMenu(false);
-                  setShowCompleted(!showCompleted);
+                  if (completed.length === 0) {
+                    alert('এই দিনের কোনো Completed Routine নেই।');
+                  } else {
+                    setShowDeleteConfirm(true);
+                  }
                 }}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs hover:bg-emerald-50 dark:hover:bg-slate-700"
+                className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
-                {showCompleted ? 'Hide Completed' : 'Show Completed'}
+                <Trash2 size={16}/>
+                Delete Completed Routines
               </button>
             </div>
           )}
@@ -300,74 +441,67 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
       <main className="relative z-10 w-full max-w-2xl mx-auto px-2.5 sm:px-4 pt-1.5 pb-24">
 
-        {/* Small Analog Clock */}
-        <section className="flex justify-center mb-1">
-          <div className="relative w-[min(52vw,200px)] aspect-square rounded-full p-[5px] bg-gradient-to-br from-green-400 via-emerald-700 to-green-950 shadow-[0_5px_14px_rgba(5,120,60,0.25)]">
-            <div className="relative w-full h-full rounded-full bg-white border-[3px] border-green-700 shadow-[inset_0_0_8px_rgba(0,0,0,0.10)] overflow-hidden">
+        {/* Countdown Card - Replaces Analog Clock */}
+        <section className="flex justify-center mb-1.5">
+          {countdownSettings.enabled && countdown ? (
+            <div className="w-full max-w-[340px] rounded-2xl p-3 bg-white/95 dark:bg-slate-900/95 border-2 border-emerald-300 dark:border-emerald-800 shadow-[0_5px_14px_rgba(5,120,60,0.16)]">
+              <div className="flex items-center justify-center gap-1.5 mb-2">
+                <Clock size={17} className="text-emerald-700 dark:text-emerald-400"/>
+                <h2 className="text-center text-base font-extrabold text-slate-950 dark:text-white">
+                  {countdownSettings.title}
+                </h2>
+              </div>
 
-              {/* Clock marks */}
-              {Array.from({ length: 60 }, (_, index) => {
-                const major = index % 5 === 0;
-                return (
-                  <div key={index} className="absolute inset-0" style={{ transform: `rotate(${index * 6}deg)` }}>
-                    <div className={`absolute left-1/2 top-[5%] -translate-x-1/2 rounded-full ${
-                      major ? 'w-[2.5px] h-[8px] bg-slate-900' : 'w-[1px] h-[3px] bg-slate-500'
-                    }`}/>
+              {countdown.completed ? (
+                <div className="text-center py-3">
+                  <div className="text-xl font-extrabold text-green-700 dark:text-green-400">
+                    Target Completed
                   </div>
-                );
-              })}
-
-              {/* Clock numbers */}
-              {Array.from({ length: 12 }, (_, index) => {
-                const number = index === 0 ? 12 : index;
-                return (
-                  <div key={number} className="absolute inset-0" style={{ transform: `rotate(${index * 30}deg)` }}>
-                    <span
-                      className="absolute left-1/2 top-[10%] -translate-x-1/2 text-[clamp(14px,4vw,19px)] font-extrabold text-slate-950"
-                      style={{ transform: `rotate(-${index * 30}deg)` }}
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { label: 'Days', value: countdown.days },
+                    { label: 'Hours', value: countdown.hours },
+                    { label: 'Minutes', value: countdown.minutes },
+                    { label: 'Seconds', value: countdown.seconds },
+                  ].map((unit) => (
+                    <div
+                      key={unit.label}
+                      className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 py-2 px-1 text-center"
                     >
-                      {number}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* MyStudy Branding */}
-              <div className="absolute left-1/2 top-[21%] -translate-x-1/2 flex flex-col items-center z-10">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-green-600" fill="currentColor">
-                  <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2-11 5"/>
-                </svg>
-                <span className="text-[13px] font-extrabold text-slate-950">MyStudy</span>
-              </div>
-
-              {/* Date Badge - raised above 6 */}
-              <div className="absolute left-1/2 top-[72%] -translate-x-1/2 z-[15] px-2.5 py-[2px] rounded-full border-[1.5px] border-slate-900 bg-white shadow-sm whitespace-nowrap">
-                <span className="text-[12px] font-extrabold text-slate-950">{visibleDate}</span>
-              </div>
-
-              {/* Clock hands */}
-              <div className="absolute inset-0 z-20 pointer-events-none">
-                <div
-                  className="absolute left-1/2 top-1/2 w-[4px] h-[24%] bg-slate-950 rounded-full origin-bottom"
-                  style={{ transform: `translate(-50%, -100%) rotate(${hourAngle}deg)` }}
-                />
-                <div
-                  className="absolute left-1/2 top-1/2 w-[3px] h-[34%] bg-slate-950 rounded-full origin-bottom"
-                  style={{ transform: `translate(-50%, -100%) rotate(${minuteAngle}deg)` }}
-                />
-                <div
-                  className="absolute left-1/2 top-1/2 w-[1.5px] h-[37%] bg-red-500 rounded-full origin-bottom"
-                  style={{ transform: `translate(-50%, -100%) rotate(${secondAngle}deg)` }}
-                />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-red-600 border-[2.5px] border-slate-950 rounded-full"/>
-              </div>
+                      <div className="text-xl sm:text-2xl font-extrabold tabular-nums text-green-700 dark:text-green-400">
+                        {String(unit.value).padStart(2, '0')}
+                      </div>
+                      <div className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                        {unit.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="w-full max-w-[340px] rounded-2xl p-3 bg-white/90 dark:bg-slate-900/90 border border-emerald-200 dark:border-slate-700 shadow-sm text-center">
+              <Clock size={22} className="mx-auto mb-1 text-emerald-600"/>
+              <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                Countdown is disabled
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Enable it from Settings.
+              </p>
+            </div>
+          )}
         </section>
 
-        {/* No Digital Local Time */}
+        {/* Date */}
+        <div className="text-center mb-1.5">
+          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">
+            {visibleDate}
+          </span>
+        </div>
 
-        {/* Compact Create Button */}
+        {/* Create Button */}
         <div className="flex justify-center mb-2.5">
           <button
             onClick={() => setShowCreate(true)}
@@ -387,6 +521,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
                 <X size={18}/>
               </button>
             </div>
+
             <input
               autoFocus
               value={newTitle}
@@ -395,6 +530,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
               placeholder="Write your routine..."
               className="w-full px-2.5 py-2 rounded-lg border border-emerald-200 dark:border-slate-700 bg-emerald-50 dark:bg-slate-800 outline-none text-sm"
             />
+
             <button
               onClick={handleCreate}
               disabled={!newTitle.trim()}
@@ -429,38 +565,71 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
           </div>
         </section>
 
-        {/* Completed */}
+        {/* Completed - Always Visible */}
         <section className="rounded-2xl p-1.5 bg-white/85 dark:bg-slate-900/85 border border-emerald-200 dark:border-slate-700 shadow-[0_3px_10px_rgba(16,120,60,0.10)]">
-          <button
-            onClick={() => setShowCompleted(!showCompleted)}
-            className="w-full flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-green-100 to-emerald-50 dark:from-emerald-950/60 dark:to-slate-800"
-          >
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-green-100 to-emerald-50 dark:from-emerald-950/60 dark:to-slate-800">
             <div className="w-7 h-7 rounded-full bg-green-600 text-white flex items-center justify-center">
               <Check size={20} strokeWidth={3.5}/>
             </div>
-            <h2 className="text-[15px] font-extrabold flex-1 text-left">
+
+            <h2 className="text-[15px] font-extrabold flex-1">
               Completed ({completed.length})
             </h2>
-            {showCompleted ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}
-          </button>
+          </div>
 
-          {showCompleted && (
-            <div className="space-y-1 p-0.5 mt-1">
-              {completed.length === 0 ? (
-                <div className="text-center py-3 text-slate-400 text-[11px]">
-                  Completed routines will appear here.
-                </div>
-              ) : (
-                completed.map(item => renderRoutine(item, true))
-              )}
-            </div>
-          )}
+          <div className="space-y-1 p-0.5 mt-1">
+            {completed.length === 0 ? (
+              <div className="text-center py-3 text-slate-400 text-[11px]">
+                Completed routines will appear here.
+              </div>
+            ) : (
+              completed.map(item => renderRoutine(item, true))
+            )}
+          </div>
         </section>
 
         <p className="text-center text-[9px] text-emerald-700/60 dark:text-slate-500 mt-2">
           MyStudy • Plan your day • Improve every day
         </p>
       </main>
+
+      {/* Delete Completed Confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-red-200 dark:border-slate-700 p-4 shadow-2xl">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
+                <Trash2 size={19} className="text-red-600"/>
+              </div>
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                Delete Completed Routines?
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              এই দিনের {completed.length}টি Completed Routine ডিলিট হবে। Pending Routines নিরাপদ থাকবে।
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deletingCompleted}
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={() => void handleDeleteCompleted()}
+                disabled={deletingCompleted}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-50"
+              >
+                {deletingCompleted ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
