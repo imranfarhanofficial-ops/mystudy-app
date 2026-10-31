@@ -3,6 +3,7 @@ import {
   X,
   Sun,
   Moon,
+  Monitor,
   HardDrive,
   Download,
   Upload,
@@ -11,9 +12,19 @@ import {
   Smartphone,
   CheckCircle2,
   AlertCircle,
-  FileArchive,
+  Bell,
+  BellRing,
   RefreshCw,
+  ShieldAlert,
+  Palette,
+  Settings,
+  ChevronRight,
+  FileJson,
+  Archive,
+  Info,
+  SmartphoneNfc,
 } from 'lucide-react';
+
 import {
   createFullBackupZip,
   restoreBackupFromZip,
@@ -22,221 +33,452 @@ import {
   exportJSONBackup,
   restoreJSONBackup,
 } from '../services/backup';
-import { getAllFolders, getAllFiles, clearAllUserData } from '../services/db';
+
+import {
+  getAllFolders,
+  getAllFiles,
+  clearAllUserData,
+  getSetting,
+  setSetting,
+} from '../services/db';
+
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  themeMode: ThemeMode;
   isDark: boolean;
-  onToggleTheme: () => void;
+  onThemeModeChange: (mode: ThemeMode) => void;
   onOpenApkModal: () => void;
+  onOpenAppUpdates: () => void;
   onDataChanged: () => void;
 }
+
+interface StorageStats {
+  folders: number;
+  files: number;
+  totalSize: number;
+}
+
+interface NotificationPreferences {
+  enabled: boolean;
+  appUpdates: boolean;
+  studyReminders: boolean;
+  announcements: boolean;
+}
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  enabled: true,
+  appUpdates: true,
+  studyReminders: true,
+  announcements: true,
+};
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  themeMode,
   isDark,
-  onToggleTheme,
+  onThemeModeChange,
   onOpenApkModal,
+  onOpenAppUpdates,
   onDataChanged,
 }) => {
-  const [stats, setStats] = useState<{ folders: number; files: number; totalSize: number }>({
+  const [activeSection, setActiveSection] = useState<string>('main');
+
+  const [stats, setStats] = useState<StorageStats>({
     folders: 0,
     files: 0,
     totalSize: 0,
   });
-  const [statusMsg, setStatusMsg] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences>(
+      DEFAULT_NOTIFICATION_PREFERENCES
+    );
 
   const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
 
+  // Load storage information
   const loadStats = async () => {
     try {
-      const [folders, files] = await Promise.all([getAllFolders(), getAllFiles()]);
-      const totalSize = files.reduce((acc, f) => acc + (f.size || 0), 0);
+      const [folders, files] = await Promise.all([
+        getAllFolders(),
+        getAllFiles(),
+      ]);
+
+      const totalSize = files.reduce(
+        (acc, file) => acc + (file.size || 0),
+        0
+      );
+
       setStats({
         folders: folders.length,
         files: files.length,
         totalSize,
       });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error('Failed to load storage statistics:', error);
+    }
+  };
+
+  // Load notification preferences
+  const loadNotificationPreferences = async () => {
+    try {
+      const saved = await getSetting<NotificationPreferences>(
+        'notification_preferences',
+        DEFAULT_NOTIFICATION_PREFERENCES
+      );
+
+      setNotificationPreferences({
+        ...DEFAULT_NOTIFICATION_PREFERENCES,
+        ...saved,
+      });
+    } catch (error) {
+      console.error('Failed to load notification preferences:', error);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
-      loadStats();
+      setActiveSection('main');
       setStatusMsg(null);
       setShowClearConfirm(false);
+
+      void loadStats();
+      void loadNotificationPreferences();
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Export full ZIP
+  // Update notification preferences
+  const updateNotificationPreference = async (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    const updated = {
+      ...notificationPreferences,
+      [key]: value,
+    };
+
+    if (key === 'enabled' && !value) {
+      updated.appUpdates = false;
+      updated.studyReminders = false;
+      updated.announcements = false;
+    }
+
+    if (key === 'enabled' && value) {
+      updated.appUpdates = true;
+      updated.studyReminders = true;
+      updated.announcements = true;
+    }
+
+    setNotificationPreferences(updated);
+
+    try {
+      await setSetting('notification_preferences', updated);
+    } catch (error) {
+      console.error('Failed to save notification preferences:', error);
+      setStatusMsg({
+        text: 'Could not save notification preferences.',
+        isError: true,
+      });
+    }
+  };
+
+  // Export ZIP backup
   const handleExportZip = async () => {
     try {
       setIsProcessing(true);
-      setStatusMsg({ text: 'Generating Google Drive Backup ZIP...' });
-      const { blob, filename, stats: backupStats } = await createFullBackupZip();
+      setStatusMsg({ text: 'Preparing complete ZIP backup...' });
+
+      const { blob, filename, stats: backupStats } =
+        await createFullBackupZip();
+
       triggerDownload(blob, filename);
+
       setStatusMsg({
-        text: `Exported ${backupStats.files} quizzes & ${backupStats.folders} folders to "${filename}". Upload this file to your Google Drive!`,
+        text: `Backup created successfully: ${backupStats.files} quizzes and ${backupStats.folders} folders.`,
       });
-    } catch (err: unknown) {
-      console.error(err);
-      setStatusMsg({ text: 'Failed to generate ZIP backup.', isError: true });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Failed to create ZIP backup.',
+        isError: true,
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Android Native Share (Save to Google Drive)
+  // Share backup to Google Drive
   const handleShareToDrive = async () => {
     try {
       setIsProcessing(true);
-      setStatusMsg({ text: 'Preparing Google Drive Share...' });
+      setStatusMsg({ text: 'Preparing Google Drive backup...' });
+
       const { blob, filename } = await createFullBackupZip();
+
       const shared = await shareBackupToGoogleDrive(blob, filename);
+
       if (shared) {
-        setStatusMsg({ text: 'Shared to Google Drive successfully!' });
-      } else {
-        // Fallback to direct download
-        triggerDownload(blob, filename);
         setStatusMsg({
-          text: `Download started ("${filename}"). Select Google Drive in your files app to store it.`,
+          text: 'Backup shared successfully.',
+        });
+      } else {
+        triggerDownload(blob, filename);
+
+        setStatusMsg({
+          text: 'Backup downloaded. You can upload it to Google Drive.',
         });
       }
-    } catch (err: unknown) {
-      console.error(err);
-      setStatusMsg({ text: 'Could not open share sheet.', isError: true });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Could not share backup.',
+        isError: true,
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Restore ZIP
-  const handleZipFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Restore ZIP backup
+  const handleZipFileSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
     if (!file) return;
 
     try {
       setIsProcessing(true);
-      setStatusMsg({ text: 'Restoring backup library...' });
+      setStatusMsg({ text: 'Restoring ZIP backup...' });
+
       const result = await restoreBackupFromZip(file);
+
       await loadStats();
       onDataChanged();
+
       setStatusMsg({
-        text: `Restored ${result.restoredFolders} folders and ${result.restoredFiles} quizzes successfully!`,
+        text: `Restored ${result.restoredFolders} folders and ${result.restoredFiles} quizzes.`,
       });
-    } catch (err: unknown) {
-      console.error(err);
-      setStatusMsg({ text: 'Failed to restore ZIP backup.', isError: true });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Failed to restore ZIP backup.',
+        isError: true,
+      });
     } finally {
       setIsProcessing(false);
-      if (zipInputRef.current) zipInputRef.current.value = '';
+
+      if (zipInputRef.current) {
+        zipInputRef.current.value = '';
+      }
     }
   };
 
-  // Export JSON
+  // Export JSON backup
   const handleExportJSON = async () => {
     try {
       setIsProcessing(true);
+      setStatusMsg({ text: 'Creating JSON backup...' });
+
       const json = await exportJSONBackup();
-      const blob = new Blob([json], { type: 'application/json' });
-      const filename = `MyStudy_Library_${new Date().toISOString().slice(0, 10)}.json`;
+
+      const blob = new Blob([json], {
+        type: 'application/json',
+      });
+
+      const filename = `MyStudy_Backup_${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+
       triggerDownload(blob, filename);
-      setStatusMsg({ text: `Exported database to ${filename}.` });
-    } catch (err) {
-      console.error(err);
-      setStatusMsg({ text: 'Failed to export JSON.', isError: true });
+
+      setStatusMsg({
+        text: 'JSON backup downloaded successfully.',
+      });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Failed to export JSON backup.',
+        isError: true,
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Restore JSON
-  const handleJSONFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Restore JSON backup
+  const handleJSONFileSelected = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        setIsProcessing(true);
-        setStatusMsg({ text: 'Restoring JSON data...' });
-        const json = event.target?.result as string;
-        const result = await restoreJSONBackup(json);
-        await loadStats();
-        onDataChanged();
-        setStatusMsg({
-          text: `Restored ${result.restoredFolders} folders and ${result.restoredFiles} quizzes.`,
-        });
-      } catch (err) {
-        console.error(err);
-        setStatusMsg({ text: 'Invalid JSON backup file.', isError: true });
-      } finally {
-        setIsProcessing(false);
+    try {
+      setIsProcessing(true);
+      setStatusMsg({ text: 'Reading JSON backup...' });
+
+      const json = await file.text();
+
+      const result = await restoreJSONBackup(json);
+
+      await loadStats();
+      onDataChanged();
+
+      setStatusMsg({
+        text: `Restored ${result.restoredFolders} folders and ${result.restoredFiles} quizzes.`,
+      });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Invalid or incompatible JSON backup.',
+        isError: true,
+      });
+    } finally {
+      setIsProcessing(false);
+
+      if (jsonInputRef.current) {
+        jsonInputRef.current.value = '';
       }
-    };
-    reader.readAsText(file);
-    if (jsonInputRef.current) jsonInputRef.current.value = '';
+    }
   };
 
-  // Clear data
+  // Clear local study data
   const handleClearAll = async () => {
     try {
       setIsProcessing(true);
+
       await clearAllUserData();
+
       await loadStats();
       onDataChanged();
+
       setShowClearConfirm(false);
-      setStatusMsg({ text: 'All local study files cleared.' });
-    } catch (err) {
-      console.error(err);
-      setStatusMsg({ text: 'Failed to clear data.', isError: true });
+
+      setStatusMsg({
+        text: 'All local study library data has been cleared.',
+      });
+    } catch (error) {
+      console.error(error);
+
+      setStatusMsg({
+        text: 'Failed to clear local data.',
+        isError: true,
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} Bytes`;
+
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const sectionButtonClass =
+    'w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-teal-400 dark:hover:border-teal-700 transition active:scale-[0.99]';
+
+  const iconBoxClass =
+    'w-10 h-10 shrink-0 rounded-xl flex items-center justify-center';
+
+  const backToMain = () => {
+    setActiveSection('main');
+    setStatusMsg(null);
+  };
+
+  const SectionHeader = ({
+    title,
+    description,
+  }: {
+    title: string;
+    description: string;
+  }) => (
+    <div className="mb-5">
+      <button
+        onClick={backToMain}
+        className="text-xs font-bold text-teal-600 dark:text-teal-400 mb-4 flex items-center gap-1"
+      >
+        <ChevronRight className="w-4 h-4 rotate-180" />
+        Back to Settings
+      </button>
+
+      <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
+        {title}
+      </h3>
+
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+        {description}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
       <div
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800"
+        className="w-full max-w-md max-h-[92vh] overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800"
         role="dialog"
         aria-modal="true"
+        aria-label="MyStudy Settings"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-teal-50 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-              <HardDrive className="w-5 h-5" />
+        {/* Main Header */}
+        <header className="px-5 py-4 flex items-center justify-between bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className={`${iconBoxClass} bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400`}>
+              <Settings className="w-5 h-5" />
             </div>
+
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Settings & Backup</h2>
-              <p className="text-xs text-slate-400">Offline Library & Storage</p>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                Settings
+              </h2>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Customize your MyStudy experience
+              </p>
             </div>
           </div>
+
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+            className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            aria-label="Close settings"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        </header>
 
-        {/* Status notification */}
+        {/* Status Message */}
         {statusMsg && (
           <div
-            className={`p-3 rounded-2xl text-xs mb-4 flex items-center gap-2 ${
+            className={`mx-4 mt-3 p-3 rounded-xl text-xs flex items-center gap-2 ${
               statusMsg.isError
-                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/40'
-                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/40'
+                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
             }`}
           >
             {statusMsg.isError ? (
@@ -244,189 +486,577 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             ) : (
               <CheckCircle2 className="w-4 h-4 shrink-0" />
             )}
+
             <span>{statusMsg.text}</span>
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Section 1: Appearance */}
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">
-              Appearance
-            </span>
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-              <div className="flex items-center gap-3">
-                {isDark ? (
-                  <Moon className="w-5 h-5 text-teal-400" />
-                ) : (
-                  <Sun className="w-5 h-5 text-amber-500" />
-                )}
-                <div>
-                  <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                    {isDark ? 'Dark Theme' : 'Light Theme'}
-                  </div>
-                  <div className="text-[11px] text-slate-400">Persistent display setting</div>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-4 space-y-3">
+
+          {/* MAIN SETTINGS */}
+          {activeSection === 'main' && (
+            <>
+              {/* Appearance */}
+              <div>
+                <div className="flex items-center gap-2 mb-2 px-1">
+                  <Palette className="w-4 h-4 text-teal-600" />
+
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Appearance
+                  </span>
                 </div>
-              </div>
-              <button
-                onClick={onToggleTheme}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs hover:bg-slate-100 transition"
-              >
-                Switch
-              </button>
-            </div>
-          </div>
 
-          {/* Section 2: Google Drive Backup & Restore */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Google Drive Backup & Restore
-              </span>
-              <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
-                ZIP Package
-              </span>
-            </div>
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">
+                        Theme Mode
+                      </p>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-              Export your entire library of folders and HTML quizzes organized neatly for Google Drive. Restore anytime from the ZIP archive.
-            </p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Choose how MyStudy looks
+                      </p>
+                    </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* Export ZIP */}
-              <button
-                onClick={handleExportZip}
-                disabled={isProcessing}
-                className="p-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex flex-col items-center justify-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download ZIP</span>
-              </button>
+                    {isDark ? (
+                      <Moon className="w-5 h-5 text-teal-500" />
+                    ) : (
+                      <Sun className="w-5 h-5 text-amber-500" />
+                    )}
+                  </div>
 
-              {/* Share to Google Drive directly */}
-              <button
-                onClick={handleShareToDrive}
-                disabled={isProcessing}
-                className="p-3 rounded-2xl bg-white dark:bg-slate-800 border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 font-bold text-xs flex flex-col items-center justify-center gap-1.5 shadow-2xs hover:bg-teal-50 dark:hover:bg-teal-950/40 transition active:scale-95 cursor-pointer disabled:opacity-50"
-              >
-                <Share2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                <span>Save to Drive</span>
-              </button>
-            </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      {
+                        value: 'light',
+                        label: 'Light',
+                        icon: Sun,
+                      },
+                      {
+                        value: 'dark',
+                        label: 'Dark',
+                        icon: Moon,
+                      },
+                      {
+                        value: 'system',
+                        label: 'System',
+                        icon: Monitor,
+                      },
+                    ] as const).map((option) => {
+                      const Icon = option.icon;
+                      const selected = themeMode === option.value;
 
-            {/* Hidden file inputs */}
-            <input
-              ref={zipInputRef}
-              type="file"
-              accept=".zip"
-              onChange={handleZipFileSelected}
-              className="hidden"
-            />
-            <input
-              ref={jsonInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleJSONFileSelected}
-              className="hidden"
-            />
-
-            {/* Restore from ZIP button */}
-            <button
-              onClick={() => zipInputRef.current?.click()}
-              disabled={isProcessing}
-              className="w-full mt-2.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-700 transition active:scale-95 cursor-pointer disabled:opacity-50"
-            >
-              <Upload className="w-4 h-4 text-slate-500" />
-              <span>Restore Library from ZIP</span>
-            </button>
-          </div>
-
-          {/* Section 3: Android APK & App Package */}
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">
-              Android APK & Source Code
-            </span>
-            <button
-              onClick={() => {
-                onClose();
-                onOpenApkModal();
-              }}
-              className="w-full p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex items-center justify-between hover:bg-emerald-100/60 dark:hover:bg-emerald-950/60 transition active:scale-95 cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <Smartphone className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <div className="text-left">
-                  <div className="text-sm font-bold">Android APK & Project Download</div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                    Install APK or get complete Android Studio project
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() =>
+                            onThemeModeChange(option.value)
+                          }
+                          className={`py-3 rounded-xl flex flex-col items-center gap-1.5 border text-xs font-bold transition ${
+                            selected
+                              ? 'bg-teal-50 dark:bg-teal-950/50 border-teal-500 text-teal-700 dark:text-teal-300'
+                              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
-              <span className="text-xs font-bold bg-emerald-600 text-white px-2.5 py-1 rounded-xl">
-                Open
-              </span>
-            </button>
-          </div>
 
-          {/* Section 4: Storage Statistics & Clear */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">
-              Local Storage Stats
-            </span>
-            <div className="grid grid-cols-3 gap-2 text-center mb-3">
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60">
-                <div className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {stats.folders}
-                </div>
-                <div className="text-[10px] text-slate-400">Folders</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60">
-                <div className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {stats.files}
-                </div>
-                <div className="text-[10px] text-slate-400">HTML Quizzes</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60">
-                <div className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {(stats.totalSize / 1024).toFixed(0)} KB
-                </div>
-                <div className="text-[10px] text-slate-400">Offline DB</div>
-              </div>
-            </div>
-
-            {/* Danger Zone: Clear Data */}
-            {!showClearConfirm ? (
+              {/* Notification Settings */}
               <button
-                onClick={() => setShowClearConfirm(true)}
-                className="w-full py-2.5 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition flex items-center justify-center gap-1.5"
+                onClick={() => setActiveSection('notifications')}
+                className={sectionButtonClass}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear All Local Library Data</span>
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400`}>
+                    <Bell className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      Notifications
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Manage notification preferences
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-slate-400" />
               </button>
-            ) : (
-              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-xs">
-                <p className="font-bold text-rose-800 dark:text-rose-200 mb-2">
-                  Permanently delete all folders and quizzes?
+
+              {/* App Updates */}
+              <button
+                onClick={onOpenAppUpdates}
+                className={sectionButtonClass}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400`}>
+                    <RefreshCw className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      App Updates
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Check version and available updates
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              {/* Backup and Restore */}
+              <button
+                onClick={() => setActiveSection('backup')}
+                className={sectionButtonClass}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400`}>
+                    <Archive className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      Backup & Restore
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      ZIP, JSON and Google Drive
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              {/* Storage */}
+              <button
+                onClick={() => {
+                  void loadStats();
+                  setActiveSection('storage');
+                }}
+                className={sectionButtonClass}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400`}>
+                    <HardDrive className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      Storage Information
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      View your offline library usage
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              {/* Android APK */}
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenApkModal();
+                }}
+                className={sectionButtonClass}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400`}>
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      APK & Source Project
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Android installation and project files
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+              </button>
+
+              {/* Danger Zone */}
+              <button
+                onClick={() => setActiveSection('danger')}
+                className={`${sectionButtonClass} border-rose-200 dark:border-rose-900/50`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`${iconBoxClass} bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400`}>
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-rose-700 dark:text-rose-300">
+                      Danger Zone
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Clear local study data
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-rose-400" />
+              </button>
+
+              <div className="pt-3 text-center">
+                <p className="text-[10px] text-slate-400">
+                  MyStudy • Learn • Practice • Improve
                 </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowClearConfirm(false)}
-                    className="flex-1 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs border"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleClearAll}
-                    disabled={isProcessing}
-                    className="flex-1 py-1.5 rounded-lg bg-rose-600 text-white font-bold text-xs"
-                  >
-                    Confirm Delete
-                  </button>
+              </div>
+            </>
+          )}
+
+          {/* NOTIFICATION SETTINGS */}
+          {activeSection === 'notifications' && (
+            <>
+              <SectionHeader
+                title="Notification Settings"
+                description="Choose which notifications you want to receive."
+              />
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <BellRing className="w-5 h-5 text-teal-500" />
+
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">
+                        All Notifications
+                      </p>
+
+                      <p className="text-[11px] text-slate-500">
+                        Main notification preference
+                      </p>
+                    </div>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={notificationPreferences.enabled}
+                    onChange={(event) =>
+                      void updateNotificationPreference(
+                        'enabled',
+                        event.target.checked
+                      )
+                    }
+                    className="w-5 h-5 accent-teal-600"
+                  />
                 </div>
               </div>
-            )}
-          </div>
-        </div>
+
+              {([
+                {
+                  key: 'appUpdates',
+                  title: 'App Updates',
+                  description: 'New versions and update announcements',
+                },
+                {
+                  key: 'studyReminders',
+                  title: 'Study Reminders',
+                  description: 'Study-related reminders',
+                },
+                {
+                  key: 'announcements',
+                  title: 'Announcements',
+                  description: 'Important MyStudy announcements',
+                },
+              ] as const).map((item) => (
+                <div
+                  key={item.key}
+                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      {item.title}
+                    </p>
+
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={notificationPreferences[item.key]}
+                    disabled={!notificationPreferences.enabled}
+                    onChange={(event) =>
+                      void updateNotificationPreference(
+                        item.key,
+                        event.target.checked
+                      )
+                    }
+                    className="w-5 h-5 accent-teal-600 disabled:opacity-40"
+                  />
+                </div>
+              ))}
+
+              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-[11px] flex gap-2">
+                <Info className="w-4 h-4 shrink-0" />
+
+                <p>
+                  These are saved notification preferences. Background
+                  push delivery will be connected separately through
+                  the notification service.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* BACKUP & RESTORE */}
+          {activeSection === 'backup' && (
+            <>
+              <SectionHeader
+                title="Backup & Restore"
+                description="Keep your study library safe and restore it whenever needed."
+              />
+
+              {/* ZIP Backup */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`${iconBoxClass} bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400`}>
+                    <Archive className="w-5 h-5" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      Complete ZIP Backup
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Folders and HTML quizzes
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleExportZip}
+                  disabled={isProcessing}
+                  className="w-full p-3 rounded-xl bg-teal-600 text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  Download ZIP Backup
+                </button>
+
+                <button
+                  onClick={handleShareToDrive}
+                  disabled={isProcessing}
+                  className="w-full mt-2 p-3 rounded-xl border border-teal-300 dark:border-teal-800 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Save / Share to Google Drive
+                </button>
+
+                <button
+                  onClick={() => zipInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="w-full mt-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  Restore from ZIP
+                </button>
+              </div>
+
+              {/* JSON Backup */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`${iconBoxClass} bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400`}>
+                    <FileJson className="w-5 h-5" />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      JSON Backup
+                    </p>
+
+                    <p className="text-[11px] text-slate-500">
+                      Database export and restore
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleExportJSON}
+                  disabled={isProcessing}
+                  className="w-full p-3 rounded-xl bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  Export JSON
+                </button>
+
+                <button
+                  onClick={() => jsonInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="w-full mt-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  Restore JSON
+                </button>
+              </div>
+
+              <input
+                ref={zipInputRef}
+                type="file"
+                accept=".zip"
+                onChange={handleZipFileSelected}
+                className="hidden"
+              />
+
+              <input
+                ref={jsonInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleJSONFileSelected}
+                className="hidden"
+              />
+            </>
+          )}
+
+          {/* STORAGE INFORMATION */}
+          {activeSection === 'storage' && (
+            <>
+              <SectionHeader
+                title="Storage Information"
+                description="Overview of your locally stored study materials."
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <HardDrive className="w-5 h-5 text-teal-500 mb-3" />
+
+                  <p className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                    {stats.folders}
+                  </p>
+
+                  <p className="text-xs text-slate-500">
+                    Total Folders
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <FileJson className="w-5 h-5 text-blue-500 mb-3" />
+
+                  <p className="text-2xl font-extrabold text-slate-900 dark:text-white">
+                    {stats.files}
+                  </p>
+
+                  <p className="text-xs text-slate-500">
+                    HTML Quizzes
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p className="text-xs font-bold text-slate-500 mb-2">
+                  Stored File Size
+                </p>
+
+                <p className="text-3xl font-extrabold text-teal-600 dark:text-teal-400">
+                  {formatSize(stats.totalSize)}
+                </p>
+
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Combined size of stored quiz files
+                </p>
+              </div>
+
+              <button
+                onClick={() => void loadStats()}
+                className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh Storage Information
+              </button>
+            </>
+          )}
+
+          {/* DANGER ZONE */}
+          {activeSection === 'danger' && (
+            <>
+              <SectionHeader
+                title="Danger Zone"
+                description="Be careful. These actions can permanently delete local study data."
+              />
+
+              <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60">
+                <div className="flex items-center gap-2 mb-3 text-rose-700 dark:text-rose-300">
+                  <ShieldAlert className="w-5 h-5" />
+
+                  <p className="text-sm font-extrabold">
+                    Clear Local Library Data
+                  </p>
+                </div>
+
+                <p className="text-xs text-rose-700/80 dark:text-rose-300/80 leading-relaxed mb-4">
+                  This removes your locally stored folders, quizzes
+                  and daily routines. Export a backup before proceeding.
+                </p>
+
+                {!showClearConfirm ? (
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    className="w-full p-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Clear All Local Study Data
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs font-extrabold text-rose-800 dark:text-rose-200">
+                      Are you absolutely sure? This action cannot be undone.
+                    </p>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowClearConfirm(false)}
+                        className="flex-1 p-3 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        onClick={handleClearAll}
+                        disabled={isProcessing}
+                        className="flex-1 p-3 rounded-xl bg-rose-600 text-white text-xs font-bold disabled:opacity-50"
+                      >
+                        Confirm Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+
+        {/* Processing Footer */}
+        {isProcessing && (
+          <footer className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-teal-600 dark:text-teal-400">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Processing...
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   );
