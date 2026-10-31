@@ -1,3 +1,4 @@
+
 export type SubjectId = 'biology' | 'chemistry' | 'physics';
 
 export interface SubjectConfig {
@@ -17,7 +18,7 @@ export interface SubjectConfig {
 export interface FolderItem {
   id: string;
   subjectId: SubjectId;
-  parentId: string | null; // null means subject root level
+  parentId: string | null;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -26,10 +27,10 @@ export interface FolderItem {
 export interface QuizFileItem {
   id: string;
   subjectId: SubjectId;
-  folderId: string | null; // null means subject root level
+  folderId: string | null;
   name: string;
   size: number;
-  content: string; // The HTML/JS/CSS code
+  content: string;
   questionCount: number;
   createdAt: number;
   updatedAt: number;
@@ -37,6 +38,7 @@ export interface QuizFileItem {
 
 export type ViewState =
   | { type: 'home' }
+  | { type: 'daily-routine' }
   | { type: 'subject'; subjectId: SubjectId; currentFolderId: string | null }
   | { type: 'upload'; preselectedSubject?: SubjectId; preselectedFolderId?: string | null }
   | { type: 'quiz'; fileId: string; returnToSubjectId: SubjectId; returnToFolderId: string | null };
