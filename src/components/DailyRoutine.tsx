@@ -88,8 +88,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [showMenu, setShowMenu] = useState(false);
-  const [countdownSettings, setCountdownSettings] =
-    useState<CountdownSettings>(DEFAULT_COUNTDOWN_SETTINGS);
+  const [countdownSettings, setCountdownSettings] = useState<CountdownSettings>(DEFAULT_COUNTDOWN_SETTINGS);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingCompleted, setDeletingCompleted] = useState(false);
 
@@ -102,38 +101,27 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   useEffect(() => {
     let active = true;
-
     const loadSettings = async () => {
       try {
         const saved = await getSetting<CountdownSettings>(
           'daily_routine_countdown_settings',
           DEFAULT_COUNTDOWN_SETTINGS
         );
-
         if (active) {
-          setCountdownSettings({
-            ...DEFAULT_COUNTDOWN_SETTINGS,
-            ...saved,
-          });
+          setCountdownSettings({ ...DEFAULT_COUNTDOWN_SETTINGS, ...saved });
         }
       } catch (error) {
         console.error('Failed to load countdown settings:', error);
       }
     };
-
     void loadSettings();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     let active = true;
-
     const load = async () => {
       setLoading(true);
-
       try {
         const result = await getDailyRoutines(dateKey);
         if (active) setRoutines(result);
@@ -143,12 +131,8 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
         if (active) setLoading(false);
       }
     };
-
     void load();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [dateKey]);
 
   const pending = useMemo(
@@ -162,18 +146,13 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
   );
 
   const countdown = useMemo(() => {
-    if (
-      !countdownSettings.enabled ||
-      !countdownSettings.startDate ||
-      !countdownSettings.targetDate
-    ) {
+    if (!countdownSettings.enabled || !countdownSettings.startDate || !countdownSettings.targetDate) {
       return null;
     }
 
     const currentTime = now.getTime();
     const startTime = getDateStart(countdownSettings.startDate);
-    const targetEndTime =
-      getDateStart(countdownSettings.targetDate) + 86400000;
+    const targetEndTime = getDateStart(countdownSettings.targetDate) + 86400000;
 
     let destination: number;
 
@@ -182,17 +161,10 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     } else if (currentTime < targetEndTime) {
       destination = targetEndTime;
     } else {
-      return {
-        completed: true,
-        days: 0,
-        hours: 0,
-        minutes: 0,
-        seconds: 0,
-      };
+      return { completed: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
     }
 
-    const difference = Math.max(0, destination - currentTime);
-    const totalSeconds = Math.floor(difference / 1000);
+    const totalSeconds = Math.max(0, Math.floor((destination - currentTime) / 1000));
 
     return {
       completed: false,
@@ -203,22 +175,12 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     };
   }, [now, countdownSettings]);
 
-  const visibleDate = now.toLocaleDateString('en-US', {
-    weekday: 'short',
-    day: 'numeric',
-  });
-
   const handleCreate = async () => {
     const title = newTitle.trim();
     if (!title) return;
-
     try {
       const created = await createDailyRoutine(dateKey, title);
-
-      setRoutines(previous =>
-        [...previous, created].sort((a, b) => a.createdAt - b.createdAt)
-      );
-
+      setRoutines(previous => [...previous, created].sort((a, b) => a.createdAt - b.createdAt));
       setNewTitle('');
       setShowCreate(false);
     } catch (error) {
@@ -229,19 +191,13 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleEdit = async (id: string) => {
     const title = editingTitle.trim();
-
     if (!title) {
       alert('Routine-এর নাম লিখো।');
       return;
     }
-
     try {
       await updateDailyRoutine(id, title);
-
-      setRoutines(previous =>
-        previous.map(item => item.id === id ? { ...item, title } : item)
-      );
-
+      setRoutines(previous => previous.map(item => item.id === id ? { ...item, title } : item));
       setEditingId(null);
       setEditingTitle('');
     } catch (error) {
@@ -252,17 +208,10 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleLock = async (item: DailyRoutineItem) => {
     if (item.locked || item.completed) return;
-
-    if (!window.confirm('এই Routine Lock করলে আর Edit করা যাবে না। Lock করতে চাও?')) {
-      return;
-    }
-
+    if (!window.confirm('এই Routine Lock করলে আর Edit করা যাবে না। Lock করতে চাও?')) return;
     try {
       await lockDailyRoutine(item.id);
-
-      setRoutines(previous =>
-        previous.map(r => r.id === item.id ? { ...r, locked: true } : r)
-      );
+      setRoutines(previous => previous.map(r => r.id === item.id ? { ...r, locked: true } : r));
     } catch (error) {
       console.error(error);
       alert('Routine Lock করা যায়নি।');
@@ -271,17 +220,11 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
   const handleComplete = async (item: DailyRoutineItem) => {
     if (item.completed) return;
-
     try {
       await completeDailyRoutine(item.id);
-
-      setRoutines(previous =>
-        previous.map(r =>
-          r.id === item.id
-            ? { ...r, completed: true, completedAt: Date.now() }
-            : r
-        )
-      );
+      setRoutines(previous => previous.map(r =>
+        r.id === item.id ? { ...r, completed: true, completedAt: Date.now() } : r
+      ));
     } catch (error) {
       console.error(error);
       alert('Routine Complete করা যায়নি।');
@@ -293,15 +236,11 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
       setShowDeleteConfirm(false);
       return;
     }
-
     setDeletingCompleted(true);
-
     try {
       await deleteCompletedDailyRoutines(dateKey);
-
       setRoutines(previous => previous.filter(item => !item.completed));
       setShowDeleteConfirm(false);
-
       alert('Completed Routines ডিলিট করা হয়েছে।');
     } catch (error) {
       console.error(error);
@@ -316,30 +255,23 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     const isEditing = editingId === item.id;
 
     return (
-      <div
-        key={item.id}
-        className="flex items-center gap-1 min-h-[39px] px-1.5 py-0.5 bg-white/95 dark:bg-slate-800/95 border border-emerald-100 dark:border-slate-700 rounded-xl shadow-sm"
-      >
+      <div key={item.id} className="flex items-center gap-1 min-h-[39px] px-1.5 py-0.5 bg-white/95 dark:bg-slate-800/95 border border-emerald-100 dark:border-slate-700 rounded-xl shadow-sm">
         <button
           type="button"
           disabled={isCompleted}
           onClick={() => handleComplete(item)}
           aria-label={isCompleted ? 'Completed' : 'Mark complete'}
           className={`w-6 h-6 shrink-0 rounded-md border-2 flex items-center justify-center ${
-            isCompleted
-              ? 'bg-green-600 border-green-600 text-white'
-              : 'bg-white dark:bg-slate-900 border-slate-500 text-transparent'
+            isCompleted ? 'bg-green-600 border-green-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-500 text-transparent'
           }`}
         >
           {isCompleted && <Check size={16} strokeWidth={3}/>}
         </button>
 
         <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0"/>
-
         <div className="w-7 h-7 shrink-0 flex items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/40">
           <Icon size={19} className="text-emerald-600 dark:text-emerald-400"/>
         </div>
-
         <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0"/>
 
         {isEditing ? (
@@ -354,18 +286,12 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
               }}
               className="w-full min-w-0 bg-emerald-50 dark:bg-slate-900 rounded-md px-1.5 py-1 text-xs outline-none border border-emerald-300"
             />
-            <button onClick={() => handleEdit(item.id)} className="p-1 text-green-600" aria-label="Save">
-              <Save size={16}/>
-            </button>
-            <button onClick={() => setEditingId(null)} className="p-1 text-slate-500" aria-label="Cancel">
-              <X size={16}/>
-            </button>
+            <button onClick={() => handleEdit(item.id)} className="p-1 text-green-600" aria-label="Save"><Save size={16}/></button>
+            <button onClick={() => setEditingId(null)} className="p-1 text-slate-500" aria-label="Cancel"><X size={16}/></button>
           </div>
         ) : (
           <div className={`flex-1 min-w-0 text-[13px] leading-tight font-semibold break-words ${
-            isCompleted
-              ? 'text-slate-500 dark:text-slate-400 line-through'
-              : 'text-slate-800 dark:text-slate-100'
+            isCompleted ? 'text-slate-500 dark:text-slate-400 line-through' : 'text-slate-800 dark:text-slate-100'
           }`}>
             {item.title}
           </div>
@@ -375,16 +301,12 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
           <>
             <button
               disabled={item.locked}
-              onClick={() => {
-                setEditingId(item.id);
-                setEditingTitle(item.title);
-              }}
+              onClick={() => { setEditingId(item.id); setEditingTitle(item.title); }}
               className={`p-1 shrink-0 ${item.locked ? 'text-slate-300' : 'text-slate-600 dark:text-slate-300'}`}
               aria-label="Edit routine"
             >
               <Pencil size={16}/>
             </button>
-
             <button
               onClick={() => handleLock(item)}
               className={`p-1 shrink-0 ${item.locked ? 'text-green-600' : 'text-slate-600 dark:text-slate-300'}`}
@@ -395,11 +317,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
           </>
         )}
 
-        {isCompleted && (
-          <div className="p-1 shrink-0 text-slate-500">
-            <LockKeyhole size={17}/>
-          </div>
-        )}
+        {isCompleted && <div className="p-1 shrink-0 text-slate-500"><LockKeyhole size={17}/></div>}
       </div>
     );
   };
@@ -408,37 +326,25 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     <div className="min-h-screen w-full relative overflow-x-hidden bg-gradient-to-b from-[#e6fff0] via-[#f4fff7] to-[#e5f9ed] dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-slate-900 dark:text-white flex flex-col">
       <DecorativeLeaves/>
 
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-emerald-100 dark:border-slate-800 px-2 py-1.5 flex items-center justify-between shadow-sm">
-        <button onClick={onBack} className="p-1.5 rounded-full" aria-label="Go back">
-          <ArrowLeft size={23}/>
-        </button>
-
+        <button onClick={onBack} className="p-1.5 rounded-full" aria-label="Go back"><ArrowLeft size={23}/></button>
         <div className="flex items-center gap-1.5">
           <CalendarCheck size={26} className="text-emerald-600"/>
           <h1 className="text-[21px] font-extrabold tracking-tight">Daily Routine</h1>
         </div>
-
         <div className="relative">
-          <button onClick={() => setShowMenu(!showMenu)} className="p-1.5" aria-label="More options">
-            <MoreVertical size={22}/>
-          </button>
-
+          <button onClick={() => setShowMenu(!showMenu)} className="p-1.5" aria-label="More options"><MoreVertical size={22}/></button>
           {showMenu && (
             <div className="absolute right-0 top-10 z-50 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-emerald-100 dark:border-slate-700 p-1.5">
               <button
                 onClick={() => {
                   setShowMenu(false);
-                  if (completed.length === 0) {
-                    alert('এই দিনের কোনো Completed Routine নেই।');
-                  } else {
-                    setShowDeleteConfirm(true);
-                  }
+                  if (completed.length === 0) alert('এই দিনের কোনো Completed Routine নেই।');
+                  else setShowDeleteConfirm(true);
                 }}
                 className="w-full flex items-center gap-2 text-left px-2.5 py-2 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
-                <Trash2 size={16}/>
-                Delete Completed Routines
+                <Trash2 size={16}/> Delete Completed Routines
               </button>
             </div>
           )}
@@ -448,9 +354,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
       <main className="relative z-10 w-full max-w-2xl mx-auto px-2.5 sm:px-4 pt-1.5 pb-24">
 
         {/* Reference Countdown Card */}
-        <section className="relative flex justify-center mb-1.5">
-
-          {/* Reference Background Glow */}
+        <section className="relative flex justify-center mb-0">
           <div className="pointer-events-none absolute -left-5 top-[15%] h-28 w-28 rounded-full bg-green-400/25 blur-xl"/>
           <div className="pointer-events-none absolute -right-5 top-[15%] h-28 w-28 rounded-full bg-green-400/25 blur-xl"/>
           <div className="pointer-events-none absolute -left-5 bottom-[10%] h-28 w-28 rounded-full bg-green-400/20 blur-xl"/>
@@ -458,23 +362,10 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
           {countdownSettings.enabled && countdown ? (
             <div className="relative z-10 w-full max-w-[680px] overflow-hidden rounded-[26px] sm:rounded-[36px] border-[3.5px] border-[#00be5e] bg-white px-5 py-6 sm:px-9 sm:pt-8 sm:pb-9 shadow-[0_16px_35px_rgba(0,190,94,0.08)]">
-
-              {/* Card Header */}
               <div className="relative z-10 mb-6 sm:mb-7 flex items-center justify-between">
-
                 <div className="flex min-w-0 items-center gap-3 sm:gap-[22px]">
-
-                  {/* Target Icon */}
                   <div className="flex shrink-0 items-center justify-center text-[#00be5e]">
-                    <svg
-                      className="h-11 w-11 sm:h-[62px] sm:w-[62px]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
+                    <svg className="h-11 w-11 sm:h-[62px] sm:w-[62px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10"/>
                       <path d="M12 6a6 6 0 1 0 6 6"/>
                       <circle cx="12" cy="12" r="2"/>
@@ -483,32 +374,18 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
                     </svg>
                   </div>
 
-                  {/* Divider */}
                   <div className="h-[42px] w-[2px] shrink-0 rounded-sm bg-[#a4b0be] sm:h-[52px]"/>
 
-                  {/* Dynamic Title */}
                   <div className="flex min-w-0 flex-col">
                     <h2 className="break-words text-[25px] font-black leading-[1.1] tracking-[-0.5px] text-[#0a142f] sm:text-[38px]">
                       {countdownSettings.title}
                     </h2>
-
-                    <p className="mt-1 text-[14px] font-bold tracking-[-0.2px] text-[#6c7a93] sm:text-[21px]">
-                      Target Countdown
-                    </p>
+                    <p className="mt-1 text-[14px] font-bold tracking-[-0.2px] text-[#6c7a93] sm:text-[21px]">Target Countdown</p>
                   </div>
                 </div>
 
-                {/* Calendar Icon */}
                 <div className="ml-2 flex shrink-0 items-center justify-center text-[#00be5e]">
-                  <svg
-                    className="h-10 w-10 sm:h-[58px] sm:w-[58px]"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg className="h-10 w-10 sm:h-[58px] sm:w-[58px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="4" width="18" height="18" rx="4" ry="4"/>
                     <line x1="16" y1="2" x2="16" y2="6"/>
                     <line x1="8" y1="2" x2="8" y2="6"/>
@@ -518,80 +395,55 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
                 </div>
               </div>
 
-              {/* Timer Grid */}
               {countdown.completed ? (
                 <div className="relative z-10 rounded-[16px] sm:rounded-[22px] border-[1.8px] border-[#c7ecd5] bg-white px-2 py-6 text-center text-xl font-black text-[#005f2b]">
                   Target Completed
                 </div>
               ) : (
                 <div className="relative z-10 grid grid-cols-4 gap-2 sm:gap-4">
-
                   {[
                     { label: 'Days', value: countdown.days },
                     { label: 'Hours', value: countdown.hours },
                     { label: 'Minutes', value: countdown.minutes },
                     { label: 'Seconds', value: countdown.seconds },
-                  ].map((unit) => (
-                    <div
-                      key={unit.label}
-                      className="flex min-w-0 flex-col items-center justify-center rounded-[16px] border-[1.8px] border-[#c7ecd5] bg-white px-1 py-3 shadow-[0_4px_14px_rgba(0,0,0,0.02)] transition-transform duration-200 hover:-translate-y-0.5 sm:rounded-[22px] sm:px-2 sm:pt-4 sm:pb-[18px]"
-                    >
-                      <span className="mb-2 text-[clamp(25px,7vw,32px)] font-black leading-none text-[#005f2b] sm:text-[52px]">
-                        {unit.value}
-                      </span>
-
-                      <span className="whitespace-nowrap text-[clamp(10px,3vw,13px)] font-bold text-[#00873d] sm:text-[20px]">
-                        {unit.label}
-                      </span>
+                  ].map(unit => (
+                    <div key={unit.label} className="flex min-w-0 flex-col items-center justify-center rounded-[16px] border-[1.8px] border-[#c7ecd5] bg-white px-1 py-3 shadow-[0_4px_14px_rgba(0,0,0,0.02)] transition-transform duration-200 hover:-translate-y-0.5 sm:rounded-[22px] sm:px-2 sm:pt-4 sm:pb-[18px]">
+                      <span className="mb-2 text-[clamp(25px,7vw,32px)] font-black leading-none text-[#005f2b] sm:text-[52px]">{unit.value}</span>
+                      <span className="whitespace-nowrap text-[clamp(10px,3vw,13px)] font-bold text-[#00873d] sm:text-[20px]">{unit.label}</span>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Bottom Right Green Corner Accent */}
               <div className="pointer-events-none absolute -bottom-[35px] -right-[35px] z-0 h-[120px] w-[120px] rounded-full bg-gradient-to-br from-[rgba(82,231,142,0.8)] to-[rgba(0,190,94,0.9)]"/>
             </div>
           ) : (
             <div className="relative z-10 w-full max-w-[680px] rounded-[26px] border-[3.5px] border-[#00be5e] bg-white px-5 py-6 text-center shadow-[0_16px_35px_rgba(0,190,94,0.08)] sm:rounded-[36px]">
               <Clock size={24} className="mx-auto mb-1 text-[#00be5e]"/>
-              <p className="text-sm font-extrabold text-[#0a142f]">
-                Countdown is disabled
-              </p>
-              <p className="text-[11px] text-[#6c7a93]">
-                Enable it from Settings.
-              </p>
+              <p className="text-sm font-extrabold text-[#0a142f]">Countdown is disabled</p>
+              <p className="text-[11px] text-[#6c7a93]">Enable it from Settings.</p>
             </div>
           )}
         </section>
 
-        {/* Date */}
-        <div className="text-center mb-1.5">
-          <span className="text-xs font-bold text-emerald-800 dark:text-emerald-400">
-            {visibleDate}
-          </span>
-        </div>
+        {/* Small breathing space after countdown card; no date row */}
+        <div className="h-4 sm:h-5"/>
 
-        {/* Create Button */}
         <div className="flex justify-center mb-2.5">
           <button
             onClick={() => setShowCreate(true)}
             className="w-[76%] min-h-[43px] rounded-full bg-gradient-to-r from-green-700 via-emerald-600 to-green-700 text-white text-[16px] font-extrabold flex items-center justify-center gap-1.5 shadow-[0_4px_10px_rgba(5,150,70,0.25)] border-[2.5px] border-white dark:border-slate-800 active:scale-[0.98] transition-transform"
           >
-            <Plus size={22} strokeWidth={3}/>
-            Create Routine
+            <Plus size={22} strokeWidth={3}/> Create Routine
           </button>
         </div>
 
-        {/* Create Form */}
         {showCreate && (
           <div className="mb-2.5 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 shadow-lg">
             <div className="flex items-center justify-between mb-1.5">
               <h2 className="font-extrabold text-sm text-emerald-800 dark:text-emerald-400">New Routine</h2>
-              <button onClick={() => { setShowCreate(false); setNewTitle(''); }} className="p-1">
-                <X size={18}/>
-              </button>
+              <button onClick={() => { setShowCreate(false); setNewTitle(''); }} className="p-1"><X size={18}/></button>
             </div>
-
             <input
               autoFocus
               value={newTitle}
@@ -600,26 +452,17 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
               placeholder="Write your routine..."
               className="w-full px-2.5 py-2 rounded-lg border border-emerald-200 dark:border-slate-700 bg-emerald-50 dark:bg-slate-800 outline-none text-sm"
             />
-
-            <button
-              onClick={handleCreate}
-              disabled={!newTitle.trim()}
-              className="w-full mt-1.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-40"
-            >
+            <button onClick={handleCreate} disabled={!newTitle.trim()} className="w-full mt-1.5 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold disabled:opacity-40">
               + Add Routine
             </button>
           </div>
         )}
 
-        {/* Pending */}
         <section className="rounded-2xl p-1.5 bg-white/85 dark:bg-slate-900/85 border border-emerald-200 dark:border-slate-700 shadow-[0_3px_10px_rgba(16,120,60,0.10)] mb-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-green-100 to-emerald-50 dark:from-emerald-950/60 dark:to-slate-800 mb-1">
             <ClipboardList size={22} className="text-green-700 dark:text-green-400"/>
-            <h2 className="text-[15px] font-extrabold flex-1">
-              Pending Routines ({pending.length})
-            </h2>
+            <h2 className="text-[15px] font-extrabold flex-1">Pending Routines ({pending.length})</h2>
           </div>
-
           <div className="space-y-1 p-0.5">
             {loading ? (
               <div className="text-center py-3 text-slate-500 text-xs">Loading routines...</div>
@@ -629,32 +472,19 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
                 <p className="font-semibold text-xs">No pending routines</p>
                 <p className="text-[11px]">Create your first routine for today.</p>
               </div>
-            ) : (
-              pending.map(item => renderRoutine(item, false))
-            )}
+            ) : pending.map(item => renderRoutine(item, false))}
           </div>
         </section>
 
-        {/* Completed - Always Visible */}
         <section className="rounded-2xl p-1.5 bg-white/85 dark:bg-slate-900/85 border border-emerald-200 dark:border-slate-700 shadow-[0_3px_10px_rgba(16,120,60,0.10)]">
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-green-100 to-emerald-50 dark:from-emerald-950/60 dark:to-slate-800">
-            <div className="w-7 h-7 rounded-full bg-green-600 text-white flex items-center justify-center">
-              <Check size={20} strokeWidth={3.5}/>
-            </div>
-
-            <h2 className="text-[15px] font-extrabold flex-1">
-              Completed ({completed.length})
-            </h2>
+            <div className="w-7 h-7 rounded-full bg-green-600 text-white flex items-center justify-center"><Check size={20} strokeWidth={3.5}/></div>
+            <h2 className="text-[15px] font-extrabold flex-1">Completed ({completed.length})</h2>
           </div>
-
           <div className="space-y-1 p-0.5 mt-1">
             {completed.length === 0 ? (
-              <div className="text-center py-3 text-slate-400 text-[11px]">
-                Completed routines will appear here.
-              </div>
-            ) : (
-              completed.map(item => renderRoutine(item, true))
-            )}
+              <div className="text-center py-3 text-slate-400 text-[11px]">Completed routines will appear here.</div>
+            ) : completed.map(item => renderRoutine(item, true))}
           </div>
         </section>
 
@@ -663,38 +493,19 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
         </p>
       </main>
 
-      {/* Delete Completed Confirmation */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-5">
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-red-200 dark:border-slate-700 p-4 shadow-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
-                <Trash2 size={19} className="text-red-600"/>
-              </div>
-
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Delete Completed Routines?
-              </h2>
+              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center"><Trash2 size={19} className="text-red-600"/></div>
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">Delete Completed Routines?</h2>
             </div>
-
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
               এই দিনের {completed.length}টি Completed Routine ডিলিট হবে। Pending Routines নিরাপদ থাকবে।
             </p>
-
             <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deletingCompleted}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold"
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={() => void handleDeleteCompleted()}
-                disabled={deletingCompleted}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-50"
-              >
+              <button onClick={() => setShowDeleteConfirm(false)} disabled={deletingCompleted} className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-sm font-bold">Cancel</button>
+              <button onClick={() => void handleDeleteCompleted()} disabled={deletingCompleted} className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-50">
                 {deletingCompleted ? 'Deleting...' : 'Delete'}
               </button>
             </div>
