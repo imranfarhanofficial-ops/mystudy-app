@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -19,7 +18,14 @@ import { AndroidApkModal } from './components/AndroidApkModal';
 import { NotificationCenter } from './components/NotificationCenter';
 
 import { ViewState } from './types';
-import { getSetting, setSetting, getFolderById } from './services/db';
+import {
+  getSetting,
+  setSetting,
+  getFolderById,
+  getNotifications,
+  NotificationItem,
+} from './services/db';
+
 import { WifiOff } from 'lucide-react';
 
 export default function App() {
@@ -30,8 +36,33 @@ export default function App() {
   const [showApkModal, setShowApkModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [dataRefreshCounter, setDataRefreshCounter] = useState(0);
+
+  // Load notifications from IndexedDB
+  useEffect(() => {
+    let active = true;
+
+    const loadNotifications = async () => {
+      try {
+        const items = await getNotifications();
+
+        if (active) {
+          setNotifications(items);
+        }
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+      }
+    };
+
+    void loadNotifications();
+
+    return () => {
+      active = false;
+    };
+  }, [showNotifications]);
 
   // Handle Android Hardware Back Button
   useEffect(() => {
@@ -42,25 +73,21 @@ export default function App() {
       const listener = await CapacitorApp.addListener(
         'backButton',
         async () => {
-          // Close Notification Center first
           if (showNotifications) {
             setShowNotifications(false);
             return;
           }
 
-          // Close APK modal
           if (showApkModal) {
             setShowApkModal(false);
             return;
           }
 
-          // Close Settings modal
           if (showSettings) {
             setShowSettings(false);
             return;
           }
 
-          // Quiz → Previous Subject/Folder
           if (viewState.type === 'quiz') {
             setViewState({
               type: 'subject',
@@ -70,13 +97,11 @@ export default function App() {
             return;
           }
 
-          // Daily Routine → Home
           if (viewState.type === 'daily-routine') {
             setViewState({ type: 'home' });
             return;
           }
 
-          // Subject / Folder navigation
           if (viewState.type === 'subject') {
             if (viewState.currentFolderId) {
               const folder = await getFolderById(
@@ -94,13 +119,11 @@ export default function App() {
             return;
           }
 
-          // Upload → Home
           if (viewState.type === 'upload') {
             setViewState({ type: 'home' });
             return;
           }
 
-          // Home → Confirm Exit
           if (viewState.type === 'home') {
             const shouldExit = window.confirm(
               'Are you sure you want to exit MyStudy?'
@@ -162,7 +185,7 @@ export default function App() {
       }
     };
 
-    initTheme();
+    void initTheme();
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -413,9 +436,9 @@ export default function App() {
       <NotificationCenter
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
-        notifications={[]}
+        notifications={notifications}
         onOpenAppUpdates={() => setShowSettings(true)}
       />
     </div>
   );
-}
+            }
