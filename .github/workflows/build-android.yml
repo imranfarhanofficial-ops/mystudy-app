@@ -14,6 +14,8 @@ jobs:
   build:
     name: Build & Release Android APK
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
     steps:
       - name: Checkout Source Code
@@ -47,6 +49,8 @@ jobs:
 
       - name: Grant Execute Permission to Gradle Wrapper
         run: chmod +x android/gradlew
+      - name: Prepare signing key
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/mystudy.p12
 
       - name: Build Android Debug APK
         run: |
