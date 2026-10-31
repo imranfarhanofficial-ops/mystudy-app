@@ -273,7 +273,7 @@ export const FolderView: React.FC<FolderViewProps> = ({
   return (
     <div className="min-h-screen flex flex-col pb-24 bg-slate-50 dark:bg-slate-950">
       {/* Top Header Bar */}
-      <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-4 py-3">
+      <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-4 py-3" style={{ top: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))' }}>
         <div className="flex items-center justify-between gap-2">
           {/* Back button */}
           <button
@@ -500,7 +500,7 @@ export const FolderView: React.FC<FolderViewProps> = ({
             </button>
 
             {/* Quick Helper for Instant Testing */}
-            <div className="mt-8 pt-6 border-t border-slate-200/60 dark:border-slate-800/80 w-full">
+            <div className="hidden">
               <button
                 onClick={handleInsertSampleQuiz}
                 className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:shadow-xs transition flex items-center justify-center gap-2"
