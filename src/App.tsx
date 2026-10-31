@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,11 +14,15 @@ import { FolderView } from './components/FolderView';
 import { UploadView } from './components/UploadView';
 import { QuizRunner } from './components/QuizRunner';
 import { DailyRoutine } from './components/DailyRoutine';
-import { SettingsModal } from './components/SettingsModal';
+import {
+  SettingsModal,
+  ThemeMode,
+} from './components/SettingsModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
 import { NotificationCenter } from './components/NotificationCenter';
 
 import { ViewState } from './types';
+
 import {
   getSetting,
   setSetting,
@@ -31,8 +36,12 @@ import {
 import { WifiOff } from 'lucide-react';
 
 export default function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [isDark, setIsDark] = useState<boolean>(false);
-  const [viewState, setViewState] = useState<ViewState>({ type: 'home' });
+
+  const [viewState, setViewState] = useState<ViewState>({
+    type: 'home',
+  });
 
   const [showSettings, setShowSettings] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
@@ -93,6 +102,100 @@ export default function App() {
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
+  };
+
+  // Load saved theme preference and online status
+  useEffect(() => {
+    let active = true;
+
+    const initTheme = async () => {
+      try {
+        const savedTheme = await getSetting<ThemeMode>(
+          'theme',
+          'light'
+        );
+
+        if (
+          active &&
+          (savedTheme === 'light' ||
+            savedTheme === 'dark' ||
+            savedTheme === 'system')
+        ) {
+          setThemeMode(savedTheme);
+        }
+      } catch (error) {
+        console.error('Failed to load theme preference:', error);
+      }
+    };
+
+    void initTheme();
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      active = false;
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Apply Light, Dark or System theme
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(
+      '(prefers-color-scheme: dark)'
+    );
+
+    const applyTheme = () => {
+      const shouldUseDark =
+        themeMode === 'dark' ||
+        (themeMode === 'system' && mediaQuery.matches);
+
+      setIsDark(shouldUseDark);
+
+      document.documentElement.classList.toggle(
+        'dark',
+        shouldUseDark
+      );
+    };
+
+    applyTheme();
+
+    if (themeMode === 'system') {
+      mediaQuery.addEventListener('change', applyTheme);
+
+      return () => {
+        mediaQuery.removeEventListener('change', applyTheme);
+      };
+    }
+  }, [themeMode]);
+
+  // Change and save theme preference
+  const handleThemeModeChange = async (mode: ThemeMode) => {
+    setThemeMode(mode);
+
+    try {
+      await setSetting('theme', mode);
+    } catch (error) {
+      console.error('Failed to save theme preference:', error);
+    }
+  };
+
+  // Header theme toggle: switch between Light and Dark
+  const toggleTheme = () => {
+    void handleThemeModeChange(isDark ? 'light' : 'dark');
+  };
+
+  // Open App Updates section
+  // The actual version checker will be connected in the App Updates step.
+  const handleOpenAppUpdates = () => {
+    setShowSettings(false);
+    window.alert(
+      'App Updates section is being connected. It will be available in the next update.'
+    );
   };
 
   // Handle Android Hardware Back Button
@@ -189,65 +292,10 @@ export default function App() {
     showNotifications,
   ]);
 
-  // Initialize theme from persistent IndexedDB
-  useEffect(() => {
-    let active = true;
-
-    const initTheme = async () => {
-      try {
-        const savedTheme = await getSetting<'light' | 'dark'>(
-          'theme',
-          'light'
-        );
-
-        if (active) {
-          const dark = savedTheme === 'dark';
-
-          setIsDark(dark);
-
-          if (dark) {
-            document.documentElement.classList.add('dark');
-          } else {
-            document.documentElement.classList.remove('dark');
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load theme preference:', e);
-      }
-    };
-
-    void initTheme();
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      active = false;
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Toggle Theme
-  const toggleTheme = async () => {
-    const nextDark = !isDark;
-
-    setIsDark(nextDark);
-
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-
-    await setSetting('theme', nextDark ? 'dark' : 'light');
-  };
-
   // Bottom Navigation selection
-  const handleSelectTab = (tab: 'home' | 'daily-routine') => {
+  const handleSelectTab = (
+    tab: 'home' | 'daily-routine'
+  ) => {
     if (tab === 'home') {
       setViewState({ type: 'home' });
     } else if (tab === 'daily-routine') {
@@ -264,13 +312,15 @@ export default function App() {
     <div
       className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col relative transition-colors duration-200"
       style={{
-        paddingTop: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
+        paddingTop:
+          'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
       }}
     >
       <div
         className="fixed top-0 left-0 right-0 z-40 bg-slate-50 dark:bg-slate-950 pointer-events-none"
         style={{
-          height: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
+          height:
+            'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
         }}
       />
 
@@ -423,8 +473,12 @@ export default function App() {
       {viewState.type === 'upload' && (
         <div className="flex-1 flex flex-col">
           <UploadView
-            initialSubject={viewState.preselectedSubject || 'biology'}
-            initialFolderId={viewState.preselectedFolderId || null}
+            initialSubject={
+              viewState.preselectedSubject || 'biology'
+            }
+            initialFolderId={
+              viewState.preselectedFolderId || null
+            }
             onUploadSuccess={(subjectId, folderId) => {
               setDataRefreshCounter((prev) => prev + 1);
 
@@ -457,10 +511,14 @@ export default function App() {
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
+        themeMode={themeMode}
         isDark={isDark}
-        onToggleTheme={toggleTheme}
+        onThemeModeChange={handleThemeModeChange}
         onOpenApkModal={() => setShowApkModal(true)}
-        onDataChanged={() => setDataRefreshCounter((prev) => prev + 1)}
+        onOpenAppUpdates={handleOpenAppUpdates}
+        onDataChanged={() =>
+          setDataRefreshCounter((prev) => prev + 1)
+        }
       />
 
       {/* Android APK & Project Modal */}
@@ -476,8 +534,8 @@ export default function App() {
         notifications={notifications}
         onMarkAsRead={handleMarkNotificationAsRead}
         onMarkAllAsRead={handleMarkAllNotificationsAsRead}
-        onOpenAppUpdates={() => setShowSettings(true)}
+        onOpenAppUpdates={handleOpenAppUpdates}
       />
     </div>
   );
-      }
+}
