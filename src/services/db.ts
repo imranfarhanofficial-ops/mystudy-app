@@ -1,7 +1,7 @@
 import { FolderItem, QuizFileItem, SubjectId } from '../types';
 
 const DB_NAME = 'MyStudyDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -35,7 +35,14 @@ export function getDB(): Promise<IDBDatabase> {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
     };
+    // Daily Routines store
+if (!db.objectStoreNames.contains('routines')) {
+  const routineStore = db.createObjectStore('routines', {
+    keyPath: 'id',
+  });
 
+  routineStore.createIndex('date', 'date', { unique: false });
+}
     request.onsuccess = () => {
       resolve(request.result);
     };
@@ -440,3 +447,136 @@ export async function clearAllUserData(): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+// ================= DAILY ROUTINE OPERATIONS =================
+
+export interface DailyRoutineItem {
+  id: string;
+  date: string;
+  title: string;
+  completed: boolean;
+  locked: boolean;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export async function getDailyRoutines(date: string): Promise<DailyRoutineItem[]> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readonly');
+    const request = tx.objectStore('routines').index('date').getAll(date);
+
+    request.onsuccess = () => {
+      const routines = (request.result || []) as DailyRoutineItem[];
+      routines.sort((a, b) => a.createdAt - b.createdAt);
+      resolve(routines);
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function createDailyRoutine(
+  date: string,
+  title: string
+): Promise<DailyRoutineItem> {
+  const db = await getDB();
+
+  const routine: DailyRoutineItem = {
+    id: generateId(),
+    date,
+    title: title.trim(),
+    completed: false,
+    locked: false,
+    createdAt: Date.now(),
+  };
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readwrite');
+    tx.objectStore('routines').add(routine);
+    tx.oncomplete = () => resolve(routine);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function updateDailyRoutine(
+  id: string,
+  title: string
+): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readwrite');
+    const store = tx.objectStore('routines');
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const routine = request.result as DailyRoutineItem | undefined;
+
+      if (!routine || routine.locked || routine.completed) {
+        tx.abort();
+        return;
+      }
+
+      routine.title = title.trim();
+      store.put(routine);
+    };
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Routine update cancelled'));
+  });
+}
+
+export async function lockDailyRoutine(id: string): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readwrite');
+    const store = tx.objectStore('routines');
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const routine = request.result as DailyRoutineItem | undefined;
+
+      if (!routine || routine.completed) {
+        tx.abort();
+        return;
+      }
+
+      routine.locked = true;
+      store.put(routine);
+    };
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Routine lock cancelled'));
+  });
+}
+
+export async function completeDailyRoutine(id: string): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readwrite');
+    const store = tx.objectStore('routines');
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const routine = request.result as DailyRoutineItem | undefined;
+
+      if (!routine || routine.completed) {
+        tx.abort();
+        return;
+      }
+
+      routine.completed = true;
+      routine.completedAt = Date.now();
+      store.put(routine);
+    };
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Routine completion cancelled'));
+  });
+      }
