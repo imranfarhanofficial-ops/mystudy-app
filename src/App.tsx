@@ -20,6 +20,7 @@ import {
 } from './components/SettingsModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
 import { NotificationCenter } from './components/NotificationCenter';
+import { AppUpdatesModal } from './components/AppUpdatesModal';
 
 import { ViewState } from './types';
 
@@ -45,6 +46,7 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
+  const [showAppUpdates, setShowAppUpdates] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -190,12 +192,10 @@ export default function App() {
   };
 
   // Open App Updates section
-  // The actual version checker will be connected in the App Updates step.
   const handleOpenAppUpdates = () => {
     setShowSettings(false);
-    window.alert(
-      'App Updates section is being connected. It will be available in the next update.'
-    );
+    setShowNotifications(false);
+    setShowAppUpdates(true);
   };
 
   // Handle Android Hardware Back Button
@@ -207,6 +207,11 @@ export default function App() {
       const listener = await CapacitorApp.addListener(
         'backButton',
         async () => {
+          if (showAppUpdates) {
+            setShowAppUpdates(false);
+            return;
+          }
+
           if (showNotifications) {
             setShowNotifications(false);
             return;
@@ -289,6 +294,7 @@ export default function App() {
     viewState,
     showSettings,
     showApkModal,
+    showAppUpdates,
     showNotifications,
   ]);
 
@@ -525,6 +531,12 @@ export default function App() {
       <AndroidApkModal
         isOpen={showApkModal}
         onClose={() => setShowApkModal(false)}
+      />
+
+      {/* App Updates Modal */}
+      <AppUpdatesModal
+        isOpen={showAppUpdates}
+        onClose={() => setShowAppUpdates(false)}
       />
 
       {/* Notification Center */}
