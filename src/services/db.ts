@@ -17,7 +17,6 @@ export function getDB(): Promise<IDBDatabase> {
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
 
-      // Folders
       if (!db.objectStoreNames.contains('folders')) {
         const store = db.createObjectStore('folders', { keyPath: 'id' });
         store.createIndex('subjectId', 'subjectId', { unique: false });
@@ -25,7 +24,6 @@ export function getDB(): Promise<IDBDatabase> {
         store.createIndex('subject_parent', ['subjectId', 'parentId'], { unique: false });
       }
 
-      // Quiz Files
       if (!db.objectStoreNames.contains('files')) {
         const store = db.createObjectStore('files', { keyPath: 'id' });
         store.createIndex('subjectId', 'subjectId', { unique: false });
@@ -33,18 +31,15 @@ export function getDB(): Promise<IDBDatabase> {
         store.createIndex('subject_folder', ['subjectId', 'folderId'], { unique: false });
       }
 
-      // Settings
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
 
-      // Daily Routines
       if (!db.objectStoreNames.contains('routines')) {
         const store = db.createObjectStore('routines', { keyPath: 'id' });
         store.createIndex('date', 'date', { unique: false });
       }
 
-      // Notifications
       if (!db.objectStoreNames.contains('notifications')) {
         const store = db.createObjectStore('notifications', { keyPath: 'id' });
         store.createIndex('date', 'date', { unique: false });
@@ -641,6 +636,42 @@ export async function completeDailyRoutine(id: string): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error('Routine completion cancelled'));
+  });
+}
+
+// Delete only completed routines for the selected date.
+// Pending routines are never deleted by this function.
+export async function deleteCompletedDailyRoutines(
+  date: string
+): Promise<void> {
+  const db = await getDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('routines', 'readwrite');
+    const store = tx.objectStore('routines');
+    const request = store.index('date').getAll(date);
+
+    request.onsuccess = () => {
+      const routines = (request.result || []) as DailyRoutineItem[];
+
+      routines.forEach((routine) => {
+        if (routine.completed) {
+          store.delete(routine.id);
+        }
+      });
+    };
+
+    request.onerror = () => {
+      try {
+        tx.abort();
+      } catch {
+        reject(request.error);
+      }
+    };
+
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Routine deletion cancelled'));
   });
 }
 
