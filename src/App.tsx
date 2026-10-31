@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -5,26 +6,32 @@
 
 import React, { useState, useEffect } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { SubjectCard } from './components/SubjectCard';
 import { FolderView } from './components/FolderView';
 import { UploadView } from './components/UploadView';
 import { QuizRunner } from './components/QuizRunner';
+import { DailyRoutine } from './components/DailyRoutine';
 import { SettingsModal } from './components/SettingsModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
-import { SubjectId, ViewState } from './types';
+
+import { ViewState } from './types';
 import { getSetting, setSetting, getFolderById } from './services/db';
 import { WifiOff } from 'lucide-react';
 
 export default function App() {
   const [isDark, setIsDark] = useState<boolean>(false);
   const [viewState, setViewState] = useState<ViewState>({ type: 'home' });
+
   const [showSettings, setShowSettings] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [dataRefreshCounter, setDataRefreshCounter] = useState(0);
-    // Handle Android Hardware Back Button
+
+  // Handle Android Hardware Back Button
   useEffect(() => {
     let removeListener: (() => void) | undefined;
     let cancelled = false;
@@ -52,6 +59,12 @@ export default function App() {
               subjectId: viewState.returnToSubjectId,
               currentFolderId: viewState.returnToFolderId,
             });
+            return;
+          }
+
+          // Daily Routine → Home
+          if (viewState.type === 'daily-routine') {
+            setViewState({ type: 'home' });
             return;
           }
 
@@ -112,12 +125,19 @@ export default function App() {
   // Initialize theme from persistent IndexedDB
   useEffect(() => {
     let active = true;
+
     const initTheme = async () => {
       try {
-        const savedTheme = await getSetting<'light' | 'dark'>('theme', 'light');
+        const savedTheme = await getSetting<'light' | 'dark'>(
+          'theme',
+          'light'
+        );
+
         if (active) {
           const dark = savedTheme === 'dark';
+
           setIsDark(dark);
+
           if (dark) {
             document.documentElement.classList.add('dark');
           } else {
@@ -128,6 +148,7 @@ export default function App() {
         console.error('Failed to load theme preference:', e);
       }
     };
+
     initTheme();
 
     const handleOnline = () => setIsOnline(true);
@@ -143,50 +164,57 @@ export default function App() {
     };
   }, []);
 
+  // Toggle Theme
   const toggleTheme = async () => {
     const nextDark = !isDark;
+
     setIsDark(nextDark);
+
     if (nextDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+
     await setSetting('theme', nextDark ? 'dark' : 'light');
   };
 
   // Bottom Navigation selection
-  const handleSelectTab = (tab: 'home' | 'upload') => {
+  const handleSelectTab = (tab: 'home' | 'daily-routine') => {
     if (tab === 'home') {
       setViewState({ type: 'home' });
-    } else if (tab === 'upload') {
-      // If we were inside a subject, carry it as preselected
-      if (viewState.type === 'subject') {
-        setViewState({
-          type: 'upload',
-          preselectedSubject: viewState.subjectId,
-          preselectedFolderId: viewState.currentFolderId,
-        });
-      } else {
-        setViewState({ type: 'upload' });
-      }
+    } else if (tab === 'daily-routine') {
+      setViewState({ type: 'daily-routine' });
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col relative transition-colors duration-200" style={{ paddingTop: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))' }}>
-<div className="fixed top-0 left-0 right-0 z-40 bg-slate-50 dark:bg-slate-950 pointer-events-none" style={{ height: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))' }} />
+    <div
+      className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col relative transition-colors duration-200"
+      style={{
+        paddingTop: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
+      }}
+    >
+      <div
+        className="fixed top-0 left-0 right-0 z-40 bg-slate-50 dark:bg-slate-950 pointer-events-none"
+        style={{
+          height: 'var(--safe-area-inset-top, env(safe-area-inset-top, 0px))',
+        }}
+      />
+
       {/* Offline Badge */}
       {!isOnline && (
         <div className="bg-amber-600 text-white text-[11px] font-bold py-1 px-3 text-center flex items-center justify-center gap-1.5 z-50">
           <WifiOff className="w-3.5 h-3.5" />
-          <span>Offline Mode Active • All Folders & HTML Quizzes Available</span>
+          <span>
+            Offline Mode Active • All Folders & HTML Quizzes Available
+          </span>
         </div>
       )}
 
       {/* VIEW: HOME PAGE */}
       {viewState.type === 'home' && (
         <div className="flex-1 flex flex-col max-w-md mx-auto w-full relative px-5 pb-28">
-          {/* Header */}
           <Header
             isDark={isDark}
             onToggleTheme={toggleTheme}
@@ -194,7 +222,6 @@ export default function App() {
             onOpenApkModal={() => setShowApkModal(true)}
           />
 
-          {/* Three Subject Cards matching reference image */}
           <main className="mt-8 space-y-4 flex-1">
             <SubjectCard
               id="biology"
@@ -233,23 +260,50 @@ export default function App() {
             />
           </main>
 
-          {/* Decorative Corner Organic Leaves Watermark (Matching reference image) */}
+          {/* Decorative Corner Leaves */}
           <div className="pointer-events-none fixed bottom-16 -left-6 opacity-20 dark:opacity-10 z-0">
-            <svg className="w-48 h-48 text-emerald-600" viewBox="0 0 200 200" fill="currentColor">
+            <svg
+              className="w-48 h-48 text-emerald-600"
+              viewBox="0 0 200 200"
+              fill="currentColor"
+            >
               <path d="M40,160 Q80,100 160,80 Q100,140 40,160 Z" />
               <path d="M20,180 Q60,140 140,140 Q80,180 20,180 Z" />
             </svg>
           </div>
+
           <div className="pointer-events-none fixed bottom-16 -right-6 opacity-20 dark:opacity-10 z-0">
-            <svg className="w-48 h-48 text-teal-600" viewBox="0 0 200 200" fill="currentColor">
+            <svg
+              className="w-48 h-48 text-teal-600"
+              viewBox="0 0 200 200"
+              fill="currentColor"
+            >
               <path d="M160,160 Q120,100 40,80 Q100,140 160,160 Z" />
               <path d="M180,180 Q140,140 60,140 Q120,180 180,180 Z" />
             </svg>
           </div>
 
-          {/* Bottom Nav */}
-          <BottomNav currentTab="home" onSelectTab={handleSelectTab} />
+          <BottomNav
+            currentTab="home"
+            onSelectTab={handleSelectTab}
+          />
         </div>
+      )}
+
+      {/* VIEW: DAILY ROUTINE */}
+      {viewState.type === 'daily-routine' && (
+        <>
+          <div className="flex-1">
+            <DailyRoutine
+              onBack={() => setViewState({ type: 'home' })}
+            />
+          </div>
+
+          <BottomNav
+            currentTab="daily-routine"
+            onSelectTab={handleSelectTab}
+          />
+        </>
       )}
 
       {/* VIEW: SUBJECT PAGE & FOLDER EXPLORER */}
@@ -283,18 +337,23 @@ export default function App() {
               })
             }
           />
-          <BottomNav currentTab="home" onSelectTab={handleSelectTab} />
+
+          <BottomNav
+            currentTab="home"
+            onSelectTab={handleSelectTab}
+          />
         </div>
       )}
 
-      {/* VIEW: UPLOAD FILES (TAB 2) */}
+      {/* VIEW: UPLOAD QUIZ FROM FOLDER */}
       {viewState.type === 'upload' && (
         <div className="flex-1 flex flex-col">
           <UploadView
             initialSubject={viewState.preselectedSubject || 'biology'}
             initialFolderId={viewState.preselectedFolderId || null}
-            onUploadSuccess={(subjectId, folderId, fileId) => {
+            onUploadSuccess={(subjectId, folderId) => {
               setDataRefreshCounter((prev) => prev + 1);
+
               setViewState({
                 type: 'subject',
                 subjectId,
@@ -303,7 +362,6 @@ export default function App() {
             }}
             onCancel={() => setViewState({ type: 'home' })}
           />
-          <BottomNav currentTab="upload" onSelectTab={handleSelectTab} />
         </div>
       )}
 
@@ -332,7 +390,10 @@ export default function App() {
       />
 
       {/* Android APK & Project Modal */}
-      <AndroidApkModal isOpen={showApkModal} onClose={() => setShowApkModal(false)} />
+      <AndroidApkModal
+        isOpen={showApkModal}
+        onClose={() => setShowApkModal(false)}
+      />
     </div>
   );
 }
