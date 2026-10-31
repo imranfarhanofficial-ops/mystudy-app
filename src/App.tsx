@@ -16,6 +16,7 @@ import { QuizRunner } from './components/QuizRunner';
 import { DailyRoutine } from './components/DailyRoutine';
 import { SettingsModal } from './components/SettingsModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
+import { NotificationCenter } from './components/NotificationCenter';
 
 import { ViewState } from './types';
 import { getSetting, setSetting, getFolderById } from './services/db';
@@ -27,6 +28,7 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showApkModal, setShowApkModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [dataRefreshCounter, setDataRefreshCounter] = useState(0);
@@ -40,7 +42,13 @@ export default function App() {
       const listener = await CapacitorApp.addListener(
         'backButton',
         async () => {
-          // Close APK modal first
+          // Close Notification Center first
+          if (showNotifications) {
+            setShowNotifications(false);
+            return;
+          }
+
+          // Close APK modal
           if (showApkModal) {
             setShowApkModal(false);
             return;
@@ -120,7 +128,12 @@ export default function App() {
       cancelled = true;
       removeListener?.();
     };
-  }, [viewState, showSettings, showApkModal]);
+  }, [
+    viewState,
+    showSettings,
+    showApkModal,
+    showNotifications,
+  ]);
 
   // Initialize theme from persistent IndexedDB
   useEffect(() => {
@@ -220,6 +233,7 @@ export default function App() {
             onToggleTheme={toggleTheme}
             onOpenSettings={() => setShowSettings(true)}
             onOpenApkModal={() => setShowApkModal(true)}
+            onOpenNotifications={() => setShowNotifications(true)}
           />
 
           <main className="mt-8 space-y-4 flex-1">
@@ -393,6 +407,14 @@ export default function App() {
       <AndroidApkModal
         isOpen={showApkModal}
         onClose={() => setShowApkModal(false)}
+      />
+
+      {/* Notification Center */}
+      <NotificationCenter
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={[]}
+        onOpenAppUpdates={() => setShowSettings(true)}
       />
     </div>
   );
