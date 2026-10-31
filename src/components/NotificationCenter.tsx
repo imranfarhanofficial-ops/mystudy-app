@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   X,
   Bell,
@@ -9,72 +9,32 @@ import {
   CheckCircle2,
   ChevronRight,
   Circle,
+  CheckCheck,
 } from 'lucide-react';
-
-export interface AppNotification {
-  id: string;
-  title: string;
-  message: string;
-  date: number;
-  type: 'update' | 'info' | 'success';
-  read: boolean;
-}
+import { NotificationItem } from '../services/db';
 
 interface NotificationCenterProps {
   isOpen: boolean;
   onClose: () => void;
-  notifications?: AppNotification[];
+  notifications: NotificationItem[];
+  onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead: () => void;
   onOpenAppUpdates: () => void;
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   isOpen,
   onClose,
-  notifications = [],
+  notifications,
+  onMarkAsRead,
+  onMarkAllAsRead,
   onOpenAppUpdates,
 }) => {
-  const [readIds, setReadIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('mystudy_read_notifications');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        'mystudy_read_notifications',
-        JSON.stringify(readIds)
-      );
-    } catch (error) {
-      console.error('Could not save notification status:', error);
-    }
-  }, [readIds]);
-
   if (!isOpen) return null;
 
-  const unreadCount = notifications.filter(
-    (item) => !item.read && !readIds.includes(item.id)
-  ).length;
+  const unreadCount = notifications.filter((item) => !item.read).length;
 
-  const markAsRead = (id: string) => {
-    setReadIds((previous) =>
-      previous.includes(id) ? previous : [...previous, id]
-    );
-  };
-
-  const handleNotificationClick = (item: AppNotification) => {
-    markAsRead(item.id);
-
-    if (item.type === 'update') {
-      onClose();
-      onOpenAppUpdates();
-    }
-  };
-
-  const getIcon = (type: AppNotification['type']) => {
+  const getIcon = (type: NotificationItem['type']) => {
     switch (type) {
       case 'update':
         return <Download className="w-5 h-5" />;
@@ -93,6 +53,17 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleNotificationClick = (item: NotificationItem) => {
+    if (!item.read) {
+      onMarkAsRead(item.id);
+    }
+
+    if (item.type === 'update') {
+      onClose();
+      onOpenAppUpdates();
+    }
   };
 
   return (
@@ -131,6 +102,16 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {unreadCount > 0 && (
+            <button
+              onClick={onMarkAllAsRead}
+              className="mt-4 flex items-center gap-2 text-xs font-bold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 transition"
+            >
+              <CheckCheck className="w-4 h-4" />
+              Mark all as read
+            </button>
+          )}
         </header>
 
         {/* Notification List */}
@@ -154,62 +135,60 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
               {notifications
                 .slice()
                 .sort((a, b) => b.date - a.date)
-                .map((item) => {
-                  const isRead = item.read || readIds.includes(item.id);
-
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => handleNotificationClick(item)}
-                      className={`w-full text-left p-4 rounded-2xl border transition active:scale-[0.99] ${
-                        isRead
-                          ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
-                          : 'bg-teal-50/70 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900/60'
-                      }`}
-                    >
-                      <div className="flex gap-3">
-                        <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNotificationClick(item)}
+                    className={`w-full text-left p-4 rounded-2xl border transition active:scale-[0.99] ${
+                      item.read
+                        ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
+                        : 'bg-teal-50/70 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900/60'
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      <div
+                        className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${
                           item.type === 'update'
                             ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
                             : item.type === 'success'
                               ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          {getIcon(item.type)}
+                        }`}
+                      >
+                        {getIcon(item.type)}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-bold text-slate-800 dark:text-white">
+                            {item.title}
+                          </h3>
+
+                          {!item.read && (
+                            <Circle className="w-2.5 h-2.5 shrink-0 fill-teal-500 text-teal-500 mt-1" />
+                          )}
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold text-slate-800 dark:text-white">
-                              {item.title}
-                            </h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                          {item.message}
+                        </p>
 
-                            {!isRead && (
-                              <Circle className="w-2.5 h-2.5 shrink-0 fill-teal-500 text-teal-500 mt-1" />
-                            )}
-                          </div>
+                        <div className="flex items-center justify-between mt-3">
+                          <span className="text-[10px] text-slate-400">
+                            {formatDate(item.date)}
+                          </span>
 
-                          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-                            {item.message}
-                          </p>
-
-                          <div className="flex items-center justify-between mt-3">
-                            <span className="text-[10px] text-slate-400">
-                              {formatDate(item.date)}
+                          {item.type === 'update' && (
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              View Update
+                              <ChevronRight className="w-3 h-3" />
                             </span>
-
-                            {item.type === 'update' && (
-                              <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                View Update
-                                <ChevronRight className="w-3 h-3" />
-                              </span>
-                            )}
-                          </div>
+                          )}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                    </div>
+                  </button>
+                ))}
             </div>
           )}
         </main>
@@ -217,4 +196,3 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     </div>
   );
 };
-
