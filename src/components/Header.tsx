@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Settings as SettingsIcon, Bell } from 'lucide-react';
 
@@ -8,14 +7,37 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenApkModal: () => void;
   onOpenNotifications?: () => void;
+  unreadCount?: number;
   minimal?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenNotifications,
+  unreadCount = 0,
   minimal = false,
 }) => {
+  const NotificationBell = () => (
+    <button
+      onClick={onOpenNotifications}
+      className="relative p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95"
+      title="Notifications"
+      aria-label={
+        unreadCount > 0
+          ? `Notifications, ${unreadCount} unread`
+          : 'Notifications'
+      }
+    >
+      <Bell className="w-5 h-5" />
+
+      {unreadCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white dark:border-slate-950">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </button>
+  );
+
   if (minimal) {
     return (
       <header className="pt-2 pb-2 px-4 flex items-center justify-between">
@@ -34,14 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onOpenNotifications}
-            className="p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95"
-            title="Notifications"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-          </button>
+          <NotificationBell />
 
           <button
             onClick={onOpenSettings}
@@ -69,14 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
           <SettingsIcon className="w-5 h-5" />
         </button>
 
-        <button
-          onClick={onOpenNotifications}
-          className="relative p-2 rounded-full text-slate-500 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95"
-          title="Notifications"
-          aria-label="Notifications"
-        >
-          <Bell className="w-5 h-5" />
-        </button>
+        <NotificationBell />
       </div>
 
       {/* Brand Logo */}
