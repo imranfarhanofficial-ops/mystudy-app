@@ -1,22 +1,39 @@
 apply plugin: 'com.android.application'
 
+def ksPass = System.getenv("KEYSTORE_PASSWORD")
+
 android {
     namespace = "com.mystudy.app"
     compileSdk = rootProject.ext.compileSdkVersion
+
     defaultConfig {
         applicationId "com.mystudy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    signingConfigs {
+        mystudy {
+            storeFile file("../mystudy.p12")
+            storePassword ksPass
+            keyAlias "mystudy"
+            keyPassword ksPass
+            storeType "PKCS12"
+        }
+    }
+
     buildTypes {
+        debug {
+            if (ksPass) {
+                signingConfig signingConfigs.mystudy
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -25,7 +42,7 @@ android {
 }
 
 repositories {
-    flatDir{
+    flatDir {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
