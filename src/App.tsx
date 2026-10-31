@@ -255,6 +255,11 @@ export default function App() {
     }
   };
 
+  // Calculate unread notification count
+  const unreadNotificationCount = notifications.filter(
+    (item) => !item.read
+  ).length;
+
   return (
     <div
       className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col relative transition-colors duration-200"
@@ -288,6 +293,7 @@ export default function App() {
             onOpenSettings={() => setShowSettings(true)}
             onOpenApkModal={() => setShowApkModal(true)}
             onOpenNotifications={() => setShowNotifications(true)}
+            unreadCount={unreadNotificationCount}
           />
 
           <main className="mt-8 space-y-4 flex-1">
@@ -474,4 +480,4 @@ export default function App() {
       />
     </div>
   );
-}
+      }
