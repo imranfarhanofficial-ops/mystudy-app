@@ -172,8 +172,8 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
     const currentTime = now.getTime();
     const startTime = getDateStart(countdownSettings.startDate);
-    const targetEndTime = getDateStart(countdownSettings.targetDate) +
-      24 * 60 * 60 * 1000;
+    const targetEndTime =
+      getDateStart(countdownSettings.targetDate) + 86400000;
 
     let destination: number;
 
@@ -182,7 +182,13 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
     } else if (currentTime < targetEndTime) {
       destination = targetEndTime;
     } else {
-      return { completed: true, days: 0, hours: 0, minutes: 0, seconds: 0 };
+      return {
+        completed: true,
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+      };
     }
 
     const difference = Math.max(0, destination - currentTime);
@@ -441,25 +447,85 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
 
       <main className="relative z-10 w-full max-w-2xl mx-auto px-2.5 sm:px-4 pt-1.5 pb-24">
 
-        {/* Countdown Card - Replaces Analog Clock */}
-        <section className="flex justify-center mb-1.5">
-          {countdownSettings.enabled && countdown ? (
-            <div className="w-full max-w-[340px] rounded-2xl p-3 bg-white/95 dark:bg-slate-900/95 border-2 border-emerald-300 dark:border-emerald-800 shadow-[0_5px_14px_rgba(5,120,60,0.16)]">
-              <div className="flex items-center justify-center gap-1.5 mb-2">
-                <Clock size={17} className="text-emerald-700 dark:text-emerald-400"/>
-                <h2 className="text-center text-base font-extrabold text-slate-950 dark:text-white">
-                  {countdownSettings.title}
-                </h2>
-              </div>
+        {/* Reference Countdown Card */}
+        <section className="relative flex justify-center mb-1.5">
 
-              {countdown.completed ? (
-                <div className="text-center py-3">
-                  <div className="text-xl font-extrabold text-green-700 dark:text-green-400">
-                    Target Completed
+          {/* Reference Background Glow */}
+          <div className="pointer-events-none absolute -left-5 top-[15%] h-28 w-28 rounded-full bg-green-400/25 blur-xl"/>
+          <div className="pointer-events-none absolute -right-5 top-[15%] h-28 w-28 rounded-full bg-green-400/25 blur-xl"/>
+          <div className="pointer-events-none absolute -left-5 bottom-[10%] h-28 w-28 rounded-full bg-green-400/20 blur-xl"/>
+          <div className="pointer-events-none absolute -right-5 bottom-[10%] h-28 w-28 rounded-full bg-green-400/20 blur-xl"/>
+
+          {countdownSettings.enabled && countdown ? (
+            <div className="relative z-10 w-full max-w-[680px] overflow-hidden rounded-[26px] sm:rounded-[36px] border-[3.5px] border-[#00be5e] bg-white px-5 py-6 sm:px-9 sm:pt-8 sm:pb-9 shadow-[0_16px_35px_rgba(0,190,94,0.08)]">
+
+              {/* Card Header */}
+              <div className="relative z-10 mb-6 sm:mb-7 flex items-center justify-between">
+
+                <div className="flex min-w-0 items-center gap-3 sm:gap-[22px]">
+
+                  {/* Target Icon */}
+                  <div className="flex shrink-0 items-center justify-center text-[#00be5e]">
+                    <svg
+                      className="h-11 w-11 sm:h-[62px] sm:w-[62px]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6a6 6 0 1 0 6 6"/>
+                      <circle cx="12" cy="12" r="2"/>
+                      <path d="m19 5-7 7"/>
+                      <path d="m14 5 5 0 0 5"/>
+                    </svg>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="h-[42px] w-[2px] shrink-0 rounded-sm bg-[#a4b0be] sm:h-[52px]"/>
+
+                  {/* Dynamic Title */}
+                  <div className="flex min-w-0 flex-col">
+                    <h2 className="break-words text-[25px] font-black leading-[1.1] tracking-[-0.5px] text-[#0a142f] sm:text-[38px]">
+                      {countdownSettings.title}
+                    </h2>
+
+                    <p className="mt-1 text-[14px] font-bold tracking-[-0.2px] text-[#6c7a93] sm:text-[21px]">
+                      Target Countdown
+                    </p>
                   </div>
                 </div>
+
+                {/* Calendar Icon */}
+                <div className="ml-2 flex shrink-0 items-center justify-center text-[#00be5e]">
+                  <svg
+                    className="h-10 w-10 sm:h-[58px] sm:w-[58px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="4" width="18" height="18" rx="4" ry="4"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                    <path d="m9 16 2 2 4-4"/>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Timer Grid */}
+              {countdown.completed ? (
+                <div className="relative z-10 rounded-[16px] sm:rounded-[22px] border-[1.8px] border-[#c7ecd5] bg-white px-2 py-6 text-center text-xl font-black text-[#005f2b]">
+                  Target Completed
+                </div>
               ) : (
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="relative z-10 grid grid-cols-4 gap-2 sm:gap-4">
+
                   {[
                     { label: 'Days', value: countdown.days },
                     { label: 'Hours', value: countdown.hours },
@@ -468,26 +534,30 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
                   ].map((unit) => (
                     <div
                       key={unit.label}
-                      className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 py-2 px-1 text-center"
+                      className="flex min-w-0 flex-col items-center justify-center rounded-[16px] border-[1.8px] border-[#c7ecd5] bg-white px-1 py-3 shadow-[0_4px_14px_rgba(0,0,0,0.02)] transition-transform duration-200 hover:-translate-y-0.5 sm:rounded-[22px] sm:px-2 sm:pt-4 sm:pb-[18px]"
                     >
-                      <div className="text-xl sm:text-2xl font-extrabold tabular-nums text-green-700 dark:text-green-400">
-                        {String(unit.value).padStart(2, '0')}
-                      </div>
-                      <div className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                      <span className="mb-2 text-[clamp(25px,7vw,32px)] font-black leading-none text-[#005f2b] sm:text-[52px]">
+                        {unit.value}
+                      </span>
+
+                      <span className="whitespace-nowrap text-[clamp(10px,3vw,13px)] font-bold text-[#00873d] sm:text-[20px]">
                         {unit.label}
-                      </div>
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
+
+              {/* Bottom Right Green Corner Accent */}
+              <div className="pointer-events-none absolute -bottom-[35px] -right-[35px] z-0 h-[120px] w-[120px] rounded-full bg-gradient-to-br from-[rgba(82,231,142,0.8)] to-[rgba(0,190,94,0.9)]"/>
             </div>
           ) : (
-            <div className="w-full max-w-[340px] rounded-2xl p-3 bg-white/90 dark:bg-slate-900/90 border border-emerald-200 dark:border-slate-700 shadow-sm text-center">
-              <Clock size={22} className="mx-auto mb-1 text-emerald-600"/>
-              <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+            <div className="relative z-10 w-full max-w-[680px] rounded-[26px] border-[3.5px] border-[#00be5e] bg-white px-5 py-6 text-center shadow-[0_16px_35px_rgba(0,190,94,0.08)] sm:rounded-[36px]">
+              <Clock size={24} className="mx-auto mb-1 text-[#00be5e]"/>
+              <p className="text-sm font-extrabold text-[#0a142f]">
                 Countdown is disabled
               </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="text-[11px] text-[#6c7a93]">
                 Enable it from Settings.
               </p>
             </div>
@@ -601,6 +671,7 @@ export const DailyRoutine: React.FC<DailyRoutineProps> = ({ onBack }) => {
               <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
                 <Trash2 size={19} className="text-red-600"/>
               </div>
+
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Delete Completed Routines?
               </h2>
