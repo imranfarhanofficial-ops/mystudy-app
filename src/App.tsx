@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { SubjectCard } from './components/SubjectCard';
@@ -13,7 +14,7 @@ import { QuizRunner } from './components/QuizRunner';
 import { SettingsModal } from './components/SettingsModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
 import { SubjectId, ViewState } from './types';
-import { getSetting, setSetting } from './services/db';
+import { getSetting, setSetting, getFolderById } from './services/db';
 import { WifiOff } from 'lucide-react';
 
 export default function App() {
@@ -23,6 +24,90 @@ export default function App() {
   const [showApkModal, setShowApkModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [dataRefreshCounter, setDataRefreshCounter] = useState(0);
+    // Handle Android Hardware Back Button
+  useEffect(() => {
+    let removeListener: (() => void) | undefined;
+    let cancelled = false;
+
+    const setupBackButton = async () => {
+      const listener = await CapacitorApp.addListener(
+        'backButton',
+        async () => {
+          // Close APK modal first
+          if (showApkModal) {
+            setShowApkModal(false);
+            return;
+          }
+
+          // Close Settings modal
+          if (showSettings) {
+            setShowSettings(false);
+            return;
+          }
+
+          // Quiz → Previous Subject/Folder
+          if (viewState.type === 'quiz') {
+            setViewState({
+              type: 'subject',
+              subjectId: viewState.returnToSubjectId,
+              currentFolderId: viewState.returnToFolderId,
+            });
+            return;
+          }
+
+          // Subject / Folder navigation
+          if (viewState.type === 'subject') {
+            if (viewState.currentFolderId) {
+              const folder = await getFolderById(
+                viewState.currentFolderId
+              );
+
+              setViewState({
+                type: 'subject',
+                subjectId: viewState.subjectId,
+                currentFolderId: folder?.parentId || null,
+              });
+            } else {
+              setViewState({ type: 'home' });
+            }
+            return;
+          }
+
+          // Upload → Home
+          if (viewState.type === 'upload') {
+            setViewState({ type: 'home' });
+            return;
+          }
+
+          // Home → Confirm Exit
+          if (viewState.type === 'home') {
+            const shouldExit = window.confirm(
+              'Are you sure you want to exit MyStudy?'
+            );
+
+            if (shouldExit) {
+              CapacitorApp.exitApp();
+            }
+          }
+        }
+      );
+
+      if (cancelled) {
+        await listener.remove();
+      } else {
+        removeListener = () => {
+          void listener.remove();
+        };
+      }
+    };
+
+    void setupBackButton();
+
+    return () => {
+      cancelled = true;
+      removeListener?.();
+    };
+  }, [viewState, showSettings, showApkModal]);
 
   // Initialize theme from persistent IndexedDB
   useEffect(() => {
