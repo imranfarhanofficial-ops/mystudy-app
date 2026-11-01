@@ -1,3 +1,4 @@
+
 package com.mystudy.app;
 
 import android.content.Context;
@@ -34,6 +35,9 @@ public class CountdownWidgetPlugin extends Plugin {
             call.reject("Could not save countdown widget settings.");
             return;
         }
+
+        // Immediately refresh all existing home screen widgets
+        CountdownWidgetProvider.updateAllWidgets(getContext());
 
         JSObject result = new JSObject();
         result.put("success", true);
