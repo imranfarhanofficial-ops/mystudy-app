@@ -16,6 +16,8 @@ import {
   getAllFolders, getAllFiles, clearAllUserData, getSetting, setSetting,
 } from '../services/db';
 
+import { syncCountdownWidgetSettings } from '../services/countdownWidget';
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 interface SettingsModalProps {
@@ -200,11 +202,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     try {
       setCountdownSaving(true);
+
       await setSetting('daily_routine_countdown_settings', {
         ...countdownSettings,
         title: countdownSettings.title.trim(),
       });
-      setStatusMsg({ text: 'Countdown settings saved successfully.' });
+
+      try {
+        await syncCountdownWidgetSettings({
+          enabled: countdownSettings.enabled,
+          startDate: countdownSettings.startDate,
+          targetDate: countdownSettings.targetDate,
+        });
+
+        setStatusMsg({
+          text: 'Countdown settings saved and home screen widget updated.',
+        });
+      } catch (widgetError) {
+        console.error('Failed to sync Android countdown widget:', widgetError);
+        setStatusMsg({
+          text: 'Countdown saved in MyStudy, but the home screen widget could not be updated.',
+          isError: true,
+        });
+      }
     } catch (error) {
       console.error('Failed to save countdown settings:', error);
       setStatusMsg({
